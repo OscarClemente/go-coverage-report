@@ -42,6 +42,24 @@ func changedPackages(changedFiles []string) []string {
 	return result
 }
 
+// OverallCoverageDelta returns the difference between new and old overall coverage
+func (r *Report) OverallCoverageDelta() float64 {
+	return r.New.Percent() - r.Old.Percent()
+}
+
+// OverallCoverageInfo returns formatted strings for old, new coverage percentages and delta
+func (r *Report) OverallCoverageInfo() (oldCov, newCov, deltaStr string, emoji string) {
+	oldPercent := r.Old.Percent()
+	newPercent := r.New.Percent()
+
+	oldCov = fmt.Sprintf("%.2f%%", oldPercent)
+	newCov = fmt.Sprintf("%.2f%%", newPercent)
+
+	emoji, deltaStr = emojiScore(newPercent, oldPercent)
+
+	return oldCov, newCov, deltaStr, emoji
+}
+
 func (r *Report) Title() string {
 	oldCovPkgs := r.Old.ByPackage()
 	newCovPkgs := r.New.ByPackage()
@@ -69,15 +87,18 @@ func (r *Report) Title() string {
 
 	}
 
+	// Include overall coverage information in the title
+	_, newCov, deltaStr, _ := r.OverallCoverageInfo()
+
 	switch {
 	case numIncrease == 0 && numDecrease == 0:
-		return fmt.Sprintln("### Merging this branch will **not change** overall coverage")
+		return fmt.Sprintf("### Coverage Report - %s (no change)", newCov)
 	case numIncrease > 0 && numDecrease == 0:
-		return fmt.Sprintln("### Merging this branch will **increase** overall coverage")
+		return fmt.Sprintf("### Coverage Report - %s (%s) - **increase**", newCov, deltaStr)
 	case numIncrease == 0 && numDecrease > 0:
-		return fmt.Sprintln("### Merging this branch will **decrease** overall coverage")
+		return fmt.Sprintf("### Coverage Report - %s (%s) - **decrease**", newCov, deltaStr)
 	default:
-		return fmt.Sprintf("### Merging this branch changes the coverage (%d decrease, %d increase)\n", numDecrease, numIncrease)
+		return fmt.Sprintf("### Coverage Report - %s (%s) - mixed changes", newCov, deltaStr)
 	}
 }
 
@@ -85,6 +106,62 @@ func (r *Report) Markdown() string {
 	report := new(strings.Builder)
 
 	fmt.Fprintln(report, r.Title())
+	r.addOverallCoverageSummary(report)
+	r.addPackageDetails(report)
+	r.addFileDetails(report)
+
+	return report.String()
+}
+
+func (r *Report) addOverallCoverageSummary(report *strings.Builder) {
+	oldCov, newCov, deltaStr, emoji := r.OverallCoverageInfo()
+
+	fmt.Fprintln(report)
+	fmt.Fprintln(report, "#### Overall Coverage Summary")
+	fmt.Fprintln(report)
+	fmt.Fprintln(report, "| Metric | Old Coverage | New Coverage | Change | :robot: |")
+	fmt.Fprintln(report, "|--------|-------------|-------------|--------|---------|")
+	fmt.Fprintf(report, "| **Total** | %s | %s | %s | %s |\n", oldCov, newCov, deltaStr, emoji)
+	fmt.Fprintln(report)
+
+	// Add statements summary
+	oldStmt := r.Old.TotalStmt
+	newStmt := r.New.TotalStmt
+	oldCovered := r.Old.CoveredStmt
+	newCovered := r.New.CoveredStmt
+
+	stmtChange := newStmt - oldStmt
+	coveredChange := newCovered - oldCovered
+
+	stmtChangeStr := ""
+	if stmtChange > 0 {
+		stmtChangeStr = fmt.Sprintf(" (+%d)", stmtChange)
+	} else if stmtChange < 0 {
+		stmtChangeStr = fmt.Sprintf(" (%d)", stmtChange)
+	}
+
+	coveredChangeStr := ""
+	if coveredChange > 0 {
+		coveredChangeStr = fmt.Sprintf(" (+%d)", coveredChange)
+	} else if coveredChange < 0 {
+		coveredChangeStr = fmt.Sprintf(" (%d)", coveredChange)
+	}
+
+	fmt.Fprintln(report, "| **Statements** | Total | Covered | Missed |")
+	fmt.Fprintln(report, "|---|---|---|---|")
+	fmt.Fprintf(report, "| **Old** | %d | %d | %d |\n", oldStmt, oldCovered, r.Old.MissedStmt)
+	fmt.Fprintf(report, "| **New** | %d%s | %d%s | %d |\n", newStmt, stmtChangeStr, newCovered, coveredChangeStr, r.New.MissedStmt)
+	fmt.Fprintln(report)
+}
+
+func (r *Report) addPackageDetails(report *strings.Builder) {
+	fmt.Fprintln(report, "---")
+	fmt.Fprintln(report)
+	fmt.Fprintln(report, "<details>")
+	fmt.Fprintln(report)
+	fmt.Fprintln(report, "<summary>Impacted Packages</summary>")
+	fmt.Fprintln(report)
+
 	fmt.Fprintln(report, "| Impacted Packages | Coverage Δ | :robot: |")
 	fmt.Fprintln(report, "|-------------------|------------|---------|")
 
@@ -110,15 +187,12 @@ func (r *Report) Markdown() string {
 		)
 	}
 
-	report.WriteString("\n")
-	r.addDetails(report)
-
-	return report.String()
+	fmt.Fprintln(report)
+	fmt.Fprintln(report, "</details>")
+	fmt.Fprintln(report)
 }
 
-func (r *Report) addDetails(report *strings.Builder) {
-	fmt.Fprintln(report, "---")
-	fmt.Fprintln(report)
+func (r *Report) addFileDetails(report *strings.Builder) {
 	fmt.Fprintln(report, "<details>")
 	fmt.Fprintln(report)
 

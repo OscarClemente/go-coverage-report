@@ -20,14 +20,31 @@ func TestReport_Markdown(t *testing.T) {
 	report := NewReport(oldCov, newCov, changedFiles)
 	actual := report.Markdown()
 
-	expected := `### Merging this branch will **decrease** overall coverage
+	expected := `### Coverage Report - 90.20% (**-9.80%**) - **decrease**
+
+#### Overall Coverage Summary
+
+| Metric | Old Coverage | New Coverage | Change | :robot: |
+|--------|-------------|-------------|--------|---------|
+| **Total** | 100.00% | 90.20% | **-9.80%** | :thumbsdown: |
+
+| **Statements** | Total | Covered | Missed |
+|---|---|---|---|
+| **Old** | 100 | 100 | 0 |
+| **New** | 102 (+2) | 92 (-8) | 10 |
+
+---
+
+<details>
+
+<summary>Impacted Packages</summary>
 
 | Impacted Packages | Coverage Δ | :robot: |
 |-------------------|------------|---------|
 | github.com/fgrosse/prioqueue | 90.20% (**-9.80%**) | :thumbsdown: |
 | github.com/fgrosse/prioqueue/foo/bar | 0.00% (ø) |  |
 
----
+</details>
 
 <details>
 
@@ -59,13 +76,30 @@ func TestReport_Markdown_OnlyChangedUnitTests(t *testing.T) {
 	report := NewReport(oldCov, newCov, changedFiles)
 	actual := report.Markdown()
 
-	expected := `### Merging this branch will **increase** overall coverage
+	expected := `### Coverage Report - 99.02% (**+8.82%**) - **increase**
+
+#### Overall Coverage Summary
+
+| Metric | Old Coverage | New Coverage | Change | :robot: |
+|--------|-------------|-------------|--------|---------|
+| **Total** | 90.20% | 99.02% | **+8.82%** | :thumbsup: |
+
+| **Statements** | Total | Covered | Missed |
+|---|---|---|---|
+| **Old** | 102 | 92 | 10 |
+| **New** | 102 | 101 (+9) | 1 |
+
+---
+
+<details>
+
+<summary>Impacted Packages</summary>
 
 | Impacted Packages | Coverage Δ | :robot: |
 |-------------------|------------|---------|
 | github.com/fgrosse/prioqueue | 99.02% (**+8.82%**) | :thumbsup: |
 
----
+</details>
 
 <details>
 
