@@ -60,6 +60,82 @@ func (r *Report) OverallCoverageInfo() (oldCov, newCov, deltaStr string, emoji s
 	return oldCov, newCov, deltaStr, emoji
 }
 
+// PRCoverageInfo returns coverage information for newly added code in this PR
+func (r *Report) PRCoverageInfo() (prCov string, emoji string, totalNew, coveredNew int64) {
+	totalNew, coveredNew = r.calculateNewCodeCoverage()
+
+	var prPercent float64
+	if totalNew > 0 {
+		prPercent = float64(coveredNew) / float64(totalNew) * 100
+	}
+
+	prCov = fmt.Sprintf("%.2f%%", prPercent)
+
+	// Use a simplified emoji scoring for PR coverage
+	switch {
+	case prPercent >= 90:
+		emoji = ":star2:"
+	case prPercent >= 80:
+		emoji = ":tada:"
+	case prPercent >= 70:
+		emoji = ":thumbsup:"
+	case prPercent >= 50:
+		emoji = ":neutral_face:"
+	case prPercent >= 30:
+		emoji = ":thumbsdown:"
+	default:
+		emoji = ":skull:"
+	}
+
+	return prCov, emoji, totalNew, coveredNew
+}
+
+// calculateNewCodeCoverage calculates coverage for statements that are new in this PR
+func (r *Report) calculateNewCodeCoverage() (totalNew, coveredNew int64) {
+	for _, fileName := range r.ChangedFiles {
+		oldProfile := r.Old.Files[fileName]
+		newProfile := r.New.Files[fileName]
+
+		if newProfile == nil {
+			continue // File was deleted or no coverage data
+		}
+
+		if oldProfile == nil {
+			// Entire file is new
+			totalNew += newProfile.TotalStmt
+			coveredNew += newProfile.CoveredStmt
+			continue
+		}
+
+		// Compare blocks to find new code
+		oldBlocks := makeBlockMap(oldProfile.Blocks)
+
+		for _, newBlock := range newProfile.Blocks {
+			blockKey := fmt.Sprintf("%d:%d-%d:%d", newBlock.StartLine, newBlock.StartCol, newBlock.EndLine, newBlock.EndCol)
+
+			if _, exists := oldBlocks[blockKey]; !exists {
+				// This block is new in this PR
+				totalNew += int64(newBlock.NumStmt)
+				if newBlock.Count > 0 {
+					coveredNew += int64(newBlock.NumStmt)
+				}
+			}
+		}
+	}
+
+	return totalNew, coveredNew
+}
+
+// makeBlockMap creates a map of blocks for quick lookup
+func makeBlockMap(blocks []ProfileBlock) map[string]ProfileBlock {
+	blockMap := make(map[string]ProfileBlock)
+	for _, block := range blocks {
+		key := fmt.Sprintf("%d:%d-%d:%d", block.StartLine, block.StartCol, block.EndLine, block.EndCol)
+		blockMap[key] = block
+	}
+	return blockMap
+}
+
 func (r *Report) Title() string {
 	oldCovPkgs := r.Old.ByPackage()
 	newCovPkgs := r.New.ByPackage()
@@ -115,6 +191,7 @@ func (r *Report) Markdown() string {
 
 func (r *Report) addOverallCoverageSummary(report *strings.Builder) {
 	oldCov, newCov, deltaStr, emoji := r.OverallCoverageInfo()
+	prCov, prEmoji, totalNew, coveredNew := r.PRCoverageInfo()
 
 	fmt.Fprintln(report)
 	fmt.Fprintln(report, "#### Overall Coverage Summary")
@@ -122,6 +199,12 @@ func (r *Report) addOverallCoverageSummary(report *strings.Builder) {
 	fmt.Fprintln(report, "| Metric | Old Coverage | New Coverage | Change | :robot: |")
 	fmt.Fprintln(report, "|--------|-------------|-------------|--------|---------|")
 	fmt.Fprintf(report, "| **Total** | %s | %s | %s | %s |\n", oldCov, newCov, deltaStr, emoji)
+
+	// Add PR-specific coverage if there's new code
+	if totalNew > 0 {
+		fmt.Fprintf(report, "| **New Code** | N/A | %s | %d/%d statements | %s |\n", prCov, coveredNew, totalNew, prEmoji)
+	}
+
 	fmt.Fprintln(report)
 
 	// Add statements summary
