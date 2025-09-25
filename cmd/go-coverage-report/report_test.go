@@ -27,6 +27,7 @@ func TestReport_Markdown(t *testing.T) {
 | Metric | Old Coverage | New Coverage | Change | :robot: |
 |--------|-------------|-------------|--------|---------|
 | **Total** | 100.00% | 90.20% | **-9.80%** | :thumbsdown: |
+| **New Code** | N/A | 85.71% | 42/49 statements | :tada: |
 
 | **Statements** | Total | Covered | Missed |
 |---|---|---|---|
