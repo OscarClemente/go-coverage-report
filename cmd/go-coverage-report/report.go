@@ -137,44 +137,20 @@ func makeBlockMap(blocks []ProfileBlock) map[string]ProfileBlock {
 }
 
 func (r *Report) Title() string {
-	oldCovPkgs := r.Old.ByPackage()
-	newCovPkgs := r.New.ByPackage()
-
-	var numDecrease, numIncrease int
-	for _, pkg := range r.ChangedPackages {
-		var oldPercent, newPercent float64
-
-		if cov, ok := oldCovPkgs[pkg]; ok {
-			oldPercent = cov.Percent()
-		}
-
-		if cov, ok := newCovPkgs[pkg]; ok {
-			newPercent = cov.Percent()
-		}
-
-		newP := round(newPercent, 2) // do rounding here so the diff is not affected by confusing rounding errors in the third decimal place
-		oldP := round(oldPercent, 2)
-		switch {
-		case newP > oldP:
-			numIncrease++
-		case newP < oldP:
-			numDecrease++
-		}
-
-	}
-
-	// Include overall coverage information in the title
+	// Use overall coverage delta to determine increase/decrease
+	overallDelta := r.OverallCoverageDelta()
 	_, newCov, deltaStr, _ := r.OverallCoverageInfo()
 
 	switch {
-	case numIncrease == 0 && numDecrease == 0:
+	case overallDelta == 0:
 		return fmt.Sprintf("### Coverage Report - %s (no change)", newCov)
-	case numIncrease > 0 && numDecrease == 0:
+	case overallDelta > 0:
 		return fmt.Sprintf("### Coverage Report - %s (%s) - **increase**", newCov, deltaStr)
-	case numIncrease == 0 && numDecrease > 0:
+	case overallDelta < 0:
 		return fmt.Sprintf("### Coverage Report - %s (%s) - **decrease**", newCov, deltaStr)
 	default:
-		return fmt.Sprintf("### Coverage Report - %s (%s) - mixed changes", newCov, deltaStr)
+		// This should never happen, but just in case
+		return fmt.Sprintf("### Coverage Report - %s (%s)", newCov, deltaStr)
 	}
 }
 
