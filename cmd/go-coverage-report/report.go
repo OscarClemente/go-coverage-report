@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -367,16 +366,6 @@ func trimPrefix(name, prefix string) string {
 	}
 
 	return trimmed
-}
-
-func round(val float64, places int) float64 {
-	if val == 0 {
-		return 0
-	}
-
-	pow := math.Pow10(places)
-	digit := math.Round(pow * val)
-	return digit / pow
 }
 
 func emojiScore(newPercent, oldPercent float64) (emoji, diffStr string) {
