@@ -31,9 +31,10 @@ OPTIONS:
 `, filepath.Base(os.Args[0])))
 
 type options struct {
-	root   string
-	trim   string
-	format string
+	root        string
+	trim        string
+	format      string
+	minCoverage float64
 }
 
 func main() {
@@ -47,6 +48,7 @@ func main() {
 	flag.String("root", "", "The import path of the tested repository to add as prefix to all paths of the changed files")
 	flag.String("trim", "", "trim a prefix in the \"Impacted Packages\" column of the markdown report")
 	flag.String("format", "markdown", "output format (currently only 'markdown' is supported)")
+	flag.Float64("min-coverage", 0, "minimum coverage threshold for new code in percentage (0 to disable)")
 
 	err := run(programArgs())
 	if err != nil {
@@ -66,10 +68,14 @@ func programArgs() (oldCov, newCov, changedFile string, opts options) {
 		os.Exit(1)
 	}
 
+	var minCoverage float64
+	fmt.Sscanf(flag.Lookup("min-coverage").Value.String(), "%f", &minCoverage)
+
 	opts = options{
-		root:   flag.Lookup("root").Value.String(),
-		trim:   flag.Lookup("trim").Value.String(),
-		format: flag.Lookup("format").Value.String(),
+		root:        flag.Lookup("root").Value.String(),
+		trim:        flag.Lookup("trim").Value.String(),
+		format:      flag.Lookup("format").Value.String(),
+		minCoverage: minCoverage,
 	}
 
 	return args[0], args[1], args[2], opts
@@ -97,6 +103,7 @@ func run(oldCovPath, newCovPath, changedFilesPath string, opts options) error {
 	}
 
 	report := NewReport(oldCov, newCov, changedFiles)
+	report.MinCoverage = opts.minCoverage
 	if opts.trim != "" {
 		report.TrimPrefix(opts.trim)
 	}
@@ -108,6 +115,17 @@ func run(oldCovPath, newCovPath, changedFilesPath string, opts options) error {
 		fmt.Fprintln(os.Stdout, report.JSON())
 	default:
 		return fmt.Errorf("unsupported format: %q", opts.format)
+	}
+
+	// Check minimum coverage threshold for new code
+	if opts.minCoverage > 0 {
+		totalNew, coveredNew := report.calculateNewCodeCoverage()
+		if totalNew > 0 {
+			newCodeCoverage := float64(coveredNew) / float64(totalNew) * 100
+			if newCodeCoverage < opts.minCoverage {
+				return fmt.Errorf("new code coverage %.2f%% is below the required threshold of %.2f%%", newCodeCoverage, opts.minCoverage)
+			}
+		}
 	}
 
 	return nil
