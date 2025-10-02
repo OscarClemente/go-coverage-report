@@ -12,6 +12,7 @@ type Report struct {
 	Old, New        *Coverage
 	ChangedFiles    []string
 	ChangedPackages []string
+	MinCoverage     float64 // Minimum coverage threshold for new code (0 to disable)
 }
 
 func NewReport(oldCov, newCov *Coverage, changedFiles []string) *Report {
@@ -181,6 +182,16 @@ func (r *Report) addOverallCoverageSummary(report *strings.Builder) {
 	}
 
 	fmt.Fprintln(report)
+
+	// Add threshold warning if enabled and not met
+	if r.MinCoverage > 0 && totalNew > 0 {
+		newCodeCoverage := float64(coveredNew) / float64(totalNew) * 100
+		if newCodeCoverage < r.MinCoverage {
+			fmt.Fprintln(report, "> [!WARNING]")
+			fmt.Fprintf(report, "> **Coverage threshold not met:** New code coverage is **%.2f%%**, which is below the required threshold of **%.2f%%**.\n", newCodeCoverage, r.MinCoverage)
+			fmt.Fprintln(report)
+		}
+	}
 
 	// Add statements summary
 	oldStmt := r.Old.TotalStmt

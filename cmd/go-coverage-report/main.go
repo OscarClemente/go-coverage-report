@@ -103,6 +103,7 @@ func run(oldCovPath, newCovPath, changedFilesPath string, opts options) error {
 	}
 
 	report := NewReport(oldCov, newCov, changedFiles)
+	report.MinCoverage = opts.minCoverage
 	if opts.trim != "" {
 		report.TrimPrefix(opts.trim)
 	}
