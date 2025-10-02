@@ -113,6 +113,8 @@ rm -r "/tmp/gh-run-download-$LAST_SUCCESSFUL_RUN_ID"
 end_group
 
 start_group "Compare code coverage results"
+# Capture the exit code but don't fail yet - we want to post the comment first
+set +e
 go-coverage-report \
     -root="$ROOT_PACKAGE" \
     -trim="$TRIM_PACKAGE" \
@@ -120,7 +122,9 @@ go-coverage-report \
     "$OLD_COVERAGE_PATH" \
     "$NEW_COVERAGE_PATH" \
     "$CHANGED_FILES_PATH" \
-  > $COVERAGE_COMMENT_PATH
+  > $COVERAGE_COMMENT_PATH 2>$COVERAGE_COMMENT_PATH.err
+COVERAGE_EXIT_CODE=$?
+set -e
 end_group
 
 if [ ! -s $COVERAGE_COMMENT_PATH ]; then
@@ -152,3 +156,12 @@ fi
 
 gh pr comment "$GITHUB_PULL_REQUEST_NUMBER" --body-file=$COVERAGE_COMMENT_PATH
 end_group
+
+# Now check if the coverage report failed the threshold check
+if [ $COVERAGE_EXIT_CODE -ne 0 ]; then
+  echo "::error::Coverage check failed"
+  if [ -s $COVERAGE_COMMENT_PATH.err ]; then
+    cat $COVERAGE_COMMENT_PATH.err >&2
+  fi
+  exit $COVERAGE_EXIT_CODE
+fi
