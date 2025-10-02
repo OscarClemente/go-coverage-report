@@ -33,6 +33,7 @@ You can use the following environment variables to configure the script:
 - ROOT_PACKAGE: The import path of the tested repository to add as a prefix to all paths of the changed files (optional)
 - TRIM_PACKAGE: Trim a prefix in the \"Impacted Packages\" column of the markdown report (optional)
 - SKIP_COMMENT: Skip creating or updating the pull request comment (default: false)
+- MIN_COVERAGE_NEW_CODE: Minimum coverage threshold for new code in percentage (default: 0, disabled)
 "
 
 if [[ $# != 3 ]]; then
@@ -48,6 +49,7 @@ GITHUB_BASELINE_WORKFLOW=${GITHUB_BASELINE_WORKFLOW:-CI}
 TARGET_BRANCH=${TARGET_BRANCH:-main}
 COVERAGE_ARTIFACT_NAME=${COVERAGE_ARTIFACT_NAME:-code-coverage}
 COVERAGE_FILE_NAME=${COVERAGE_FILE_NAME:-coverage.txt}
+MIN_COVERAGE_NEW_CODE=${MIN_COVERAGE_NEW_CODE:-0}
 
 OLD_COVERAGE_PATH=.github/outputs/old-coverage.txt
 NEW_COVERAGE_PATH=.github/outputs/new-coverage.txt
@@ -114,6 +116,7 @@ start_group "Compare code coverage results"
 go-coverage-report \
     -root="$ROOT_PACKAGE" \
     -trim="$TRIM_PACKAGE" \
+    -min-coverage="$MIN_COVERAGE_NEW_CODE" \
     "$OLD_COVERAGE_PATH" \
     "$NEW_COVERAGE_PATH" \
     "$CHANGED_FILES_PATH" \

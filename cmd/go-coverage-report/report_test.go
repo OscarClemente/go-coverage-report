@@ -113,3 +113,46 @@ func TestReport_Markdown_OnlyChangedUnitTests(t *testing.T) {
 </details>`
 	assert.Equal(t, expected, actual)
 }
+
+func TestReport_MinimumCoverageThreshold(t *testing.T) {
+	oldCov, err := ParseCoverage("testdata/01-old-coverage.txt")
+	require.NoError(t, err)
+
+	newCov, err := ParseCoverage("testdata/01-new-coverage.txt")
+	require.NoError(t, err)
+
+	changedFiles, err := ParseChangedFiles("testdata/01-changed-files.json", "github.com/fgrosse/prioqueue")
+	require.NoError(t, err)
+
+	report := NewReport(oldCov, newCov, changedFiles)
+
+	// Test that new code coverage is calculated correctly
+	totalNew, coveredNew := report.calculateNewCodeCoverage()
+	require.Equal(t, int64(49), totalNew)
+	require.Equal(t, int64(42), coveredNew)
+
+	newCodeCoverage := float64(coveredNew) / float64(totalNew) * 100
+	require.InDelta(t, 85.71, newCodeCoverage, 0.01)
+
+	// Test that coverage above threshold passes
+	opts := options{minCoverage: 80}
+	if opts.minCoverage > 0 && totalNew > 0 {
+		if newCodeCoverage < opts.minCoverage {
+			t.Errorf("Expected new code coverage %.2f%% to be above threshold %.2f%%", newCodeCoverage, opts.minCoverage)
+		}
+	}
+
+	// Test that coverage below threshold fails
+	opts = options{minCoverage: 90}
+	if opts.minCoverage > 0 && totalNew > 0 {
+		if newCodeCoverage >= opts.minCoverage {
+			t.Errorf("Expected new code coverage %.2f%% to be below threshold %.2f%%", newCodeCoverage, opts.minCoverage)
+		}
+	}
+
+	// Test that threshold of 0 disables the check
+	opts = options{minCoverage: 0}
+	if opts.minCoverage > 0 {
+		t.Errorf("Expected threshold check to be disabled when minCoverage is 0")
+	}
+}

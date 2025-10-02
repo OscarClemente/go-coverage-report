@@ -107,6 +107,21 @@ jobs:
           coverage-file-name: "coverage.txt" # can be omitted if you used this default value
 ```
 
+#### Enforcing Coverage Thresholds
+
+You can optionally enforce a minimum coverage threshold for new code. If the coverage of new code falls below this threshold, the action will fail:
+
+```yaml
+      - uses: fgrosse/go-coverage-report@v1.1.1
+        with:
+          coverage-artifact-name: "code-coverage"
+          coverage-file-name: "coverage.txt"
+          min-coverage-new-code: 80 # Fail if new code coverage is below 80%
+```
+
+The threshold check applies specifically to the "New Code" row in the coverage report, which shows the coverage percentage for code that was added or modified in the pull request. By default, the threshold is set to `0` (disabled). Set it to any value greater than 0 to enforce a minimum coverage requirement.
+
+
 
 ### Inputs
 
@@ -152,6 +167,13 @@ inputs:
   trim:
     description: Trim a prefix in the "Impacted Packages" column of the markdown report.
     required: false
+
+  min-coverage-new-code:
+    description: |
+      Minimum coverage threshold (in percentage) for new code. If the coverage of new code
+      is below this threshold, the action will fail. Set to 0 to disable threshold check.
+    required: false
+    default: '0'
 
   github-baseline-workflow-ref:
     description: |

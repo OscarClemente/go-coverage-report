@@ -9,7 +9,7 @@ inputs:
   version:
     description: 'The exact version tag of the go-coverage-report tool to use.'
     required: true
-    default: "v1.4.1"
+    default: "v1.4.2"
 
   sha256sum:
     description: 'Optional SHA256 checksum of the tarball when downloading the go-coverage-report binary.'
@@ -45,6 +45,13 @@ inputs:
   trim:
     description: Trim a prefix in the "Impacted Packages" column of the markdown report.
     required: false
+
+  min-coverage-new-code:
+    description: |
+      Minimum coverage threshold (in percentage) for new code. If the coverage of new code
+      is below this threshold, the action will fail. Set to 0 to disable threshold check.
+    required: false
+    default: '0'
 
   github-baseline-workflow-ref:
     description: |
@@ -98,3 +105,4 @@ runs:
         ROOT_PACKAGE: ${{ inputs.root-package }}
         SKIP_COMMENT: ${{ inputs.skip-comment }}
         TRIM_PACKAGE: ${{ inputs.trim }}
+        MIN_COVERAGE_NEW_CODE: ${{ inputs.min-coverage-new-code }}
