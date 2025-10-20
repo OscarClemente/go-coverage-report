@@ -138,14 +138,14 @@ start_group "Compare code coverage results"
 # Capture the exit code but don't fail yet - we want to post the comment first
 set +e
 
-# Build the command with optional diff parameter
-COVERAGE_CMD="go-coverage-report -root=\"$ROOT_PACKAGE\" -trim=\"$TRIM_PACKAGE\" -min-coverage=\"$MIN_COVERAGE_NEW_CODE\""
+# Build the command arguments
+COVERAGE_ARGS=(-root="$ROOT_PACKAGE" -trim="$TRIM_PACKAGE" -min-coverage="$MIN_COVERAGE_NEW_CODE")
 if [ -f "$DIFF_FILE_PATH" ]; then
-  COVERAGE_CMD="$COVERAGE_CMD -diff=\"$DIFF_FILE_PATH\""
+  COVERAGE_ARGS+=(-diff="$DIFF_FILE_PATH")
 fi
-COVERAGE_CMD="$COVERAGE_CMD \"$OLD_COVERAGE_PATH\" \"$NEW_COVERAGE_PATH\" \"$CHANGED_FILES_PATH\""
+COVERAGE_ARGS+=("$OLD_COVERAGE_PATH" "$NEW_COVERAGE_PATH" "$CHANGED_FILES_PATH")
 
-eval $COVERAGE_CMD > $COVERAGE_COMMENT_PATH 2>$COVERAGE_COMMENT_PATH.err
+go-coverage-report "${COVERAGE_ARGS[@]}" > "$COVERAGE_COMMENT_PATH" 2>"$COVERAGE_COMMENT_PATH.err"
 COVERAGE_EXIT_CODE=$?
 set -e
 end_group
