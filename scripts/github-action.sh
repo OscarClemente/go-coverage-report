@@ -34,6 +34,7 @@ You can use the following environment variables to configure the script:
 - TRIM_PACKAGE: Trim a prefix in the \"Impacted Packages\" column of the markdown report (optional)
 - SKIP_COMMENT: Skip creating or updating the pull request comment (default: false)
 - MIN_COVERAGE_NEW_CODE: Minimum coverage threshold for new code in percentage (default: 0, disabled)
+- USE_GIT_DIFF: Use git diff for line-level coverage calculation (default: true)
 "
 
 if [[ $# != 3 ]]; then
@@ -50,10 +51,12 @@ TARGET_BRANCH=${TARGET_BRANCH:-main}
 COVERAGE_ARTIFACT_NAME=${COVERAGE_ARTIFACT_NAME:-code-coverage}
 COVERAGE_FILE_NAME=${COVERAGE_FILE_NAME:-coverage.txt}
 MIN_COVERAGE_NEW_CODE=${MIN_COVERAGE_NEW_CODE:-0}
+USE_GIT_DIFF=${USE_GIT_DIFF:-true}
 
 OLD_COVERAGE_PATH=.github/outputs/old-coverage.txt
 NEW_COVERAGE_PATH=.github/outputs/new-coverage.txt
 COVERAGE_COMMENT_PATH=.github/outputs/coverage-comment.md
+DIFF_FILE_PATH=.github/outputs/pr-diff.patch
 CHANGED_FILES_PATH=${CHANGED_FILES_PATH:-.github/outputs/all_modified_files.json}
 SKIP_COMMENT=${SKIP_COMMENT:-false}
 
@@ -112,17 +115,37 @@ mv "/tmp/gh-run-download-$LAST_SUCCESSFUL_RUN_ID/$COVERAGE_FILE_NAME" $OLD_COVER
 rm -r "/tmp/gh-run-download-$LAST_SUCCESSFUL_RUN_ID"
 end_group
 
+start_group "Generate git diff for line-level coverage"
+if [ "$USE_GIT_DIFF" = "true" ]; then
+  echo "Generating git diff between $TARGET_BRANCH and HEAD..."
+  # Fetch the target branch to ensure we have it
+  git fetch origin "$TARGET_BRANCH:refs/remotes/origin/$TARGET_BRANCH" || true
+  # Generate unified diff for Go files only
+  git diff "origin/$TARGET_BRANCH...HEAD" -- '*.go' > "$DIFF_FILE_PATH" || true
+  
+  if [ -s "$DIFF_FILE_PATH" ]; then
+    echo "Git diff generated successfully ($(wc -l < "$DIFF_FILE_PATH") lines)"
+  else
+    echo "No diff generated or diff is empty, falling back to block-based comparison"
+    rm -f "$DIFF_FILE_PATH"
+  fi
+else
+  echo "Git diff disabled, using block-based comparison"
+fi
+end_group
+
 start_group "Compare code coverage results"
 # Capture the exit code but don't fail yet - we want to post the comment first
 set +e
-go-coverage-report \
-    -root="$ROOT_PACKAGE" \
-    -trim="$TRIM_PACKAGE" \
-    -min-coverage="$MIN_COVERAGE_NEW_CODE" \
-    "$OLD_COVERAGE_PATH" \
-    "$NEW_COVERAGE_PATH" \
-    "$CHANGED_FILES_PATH" \
-  > $COVERAGE_COMMENT_PATH 2>$COVERAGE_COMMENT_PATH.err
+
+# Build the command with optional diff parameter
+COVERAGE_CMD="go-coverage-report -root=\"$ROOT_PACKAGE\" -trim=\"$TRIM_PACKAGE\" -min-coverage=\"$MIN_COVERAGE_NEW_CODE\""
+if [ -f "$DIFF_FILE_PATH" ]; then
+  COVERAGE_CMD="$COVERAGE_CMD -diff=\"$DIFF_FILE_PATH\""
+fi
+COVERAGE_CMD="$COVERAGE_CMD \"$OLD_COVERAGE_PATH\" \"$NEW_COVERAGE_PATH\" \"$CHANGED_FILES_PATH\""
+
+eval $COVERAGE_CMD > $COVERAGE_COMMENT_PATH 2>$COVERAGE_COMMENT_PATH.err
 COVERAGE_EXIT_CODE=$?
 set -e
 end_group

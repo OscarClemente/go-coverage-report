@@ -1,0 +1,18 @@
+diff --git a/min_heap.go b/min_heap.go
+index 1234567..abcdefg 100644
+--- a/min_heap.go
++++ b/min_heap.go
+@@ -40,7 +40,11 @@ func (h *MinHeap) Pop() interface{} {
+ 	return x
+ }
+ 
+-func (h *MinHeap) Less(i, j int) bool {
++func (h *MinHeap) Less(i, j int) bool {  
++	if h.items[i] == nil {
++		return false
++	}
++	
+ 	if h.items[j] == nil {
+ 		return true
+ 	}
+

@@ -17,6 +17,12 @@ motivate the contributors to write tests for their code.
 The provided tool and GitHub Action work without any third-party services
 which makes them fast, secure and very easy-to-setup in your own CI/CD pipeline.
 
+### ✨ New: Git Diff-Based Coverage
+
+The tool now supports **git diff-based coverage calculation** for more accurate reporting, especially when dealing with refactored code. Instead of comparing coverage blocks by position (which fails when code moves), it uses git diff to identify which lines were actually added or modified. This is enabled by default!
+
+[Learn more about git diff-based coverage →](DIFF_COVERAGE.md)
+
 ## Example
 
 Example of a pull request comment created by `go-coverage-report`:
