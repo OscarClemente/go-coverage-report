@@ -238,3 +238,198 @@ func TestReport_Markdown_WithPassedThreshold(t *testing.T) {
 	assert.NotContains(t, actual, "> [!WARNING]")
 	assert.NotContains(t, actual, "Coverage threshold not met")
 }
+
+func TestReport_WithGitDiff(t *testing.T) {
+	// This test verifies that git diff-based coverage calculation works correctly
+	// and solves the refactoring problem where code moves to different line positions
+
+	oldCov, err := ParseCoverage("testdata/01-old-coverage.txt")
+	require.NoError(t, err)
+
+	newCov, err := ParseCoverage("testdata/01-new-coverage.txt")
+	require.NoError(t, err)
+
+	changedFiles, err := ParseChangedFiles("testdata/01-changed-files.json", "github.com/fgrosse/prioqueue")
+	require.NoError(t, err)
+
+	// Create a diff that indicates only specific lines were actually added
+	// In the real scenario, the code was refactored from lines 42-47 to 42-52
+	// but only lines 48-50 are truly new (the if statement that was added)
+	diffInfo := &DiffInfo{
+		Files: map[string]*FileDiff{
+			"github.com/fgrosse/prioqueue/min_heap.go": {
+				FileName: "github.com/fgrosse/prioqueue/min_heap.go",
+				AddedLines: map[int]bool{
+					// These are the lines that were actually added in the refactoring
+					48: true, // New if statement
+					49: true, // Content of new if
+					50: true, // Closing brace
+				},
+				ModifiedLines: map[int]bool{},
+			},
+		},
+	}
+
+	// Test WITHOUT diff (old behavior - block-based comparison)
+	reportWithoutDiff := NewReport(oldCov, newCov, changedFiles)
+	totalNewWithoutDiff, coveredNewWithoutDiff := reportWithoutDiff.calculateNewCodeCoverage()
+
+	// Test WITH diff (new behavior - line-based comparison)
+	reportWithDiff := NewReport(oldCov, newCov, changedFiles)
+	reportWithDiff.DiffInfo = diffInfo
+	totalNewWithDiff, coveredNewWithDiff := reportWithDiff.calculateNewCodeCoverage()
+
+	// Without diff: treats many blocks as "new" because positions changed
+	// This is the problematic behavior we're fixing
+	assert.Greater(t, totalNewWithoutDiff, int64(0), "Should detect some new code without diff")
+
+	// With diff: only counts blocks that contain actually added lines
+	// This should be much more accurate
+	assert.Greater(t, totalNewWithDiff, int64(0), "Should detect new code with diff")
+
+	// The key assertion: diff-based should report fewer "new" statements
+	// because it only counts lines that were actually added, not moved
+	assert.LessOrEqual(t, totalNewWithDiff, totalNewWithoutDiff,
+		"Diff-based coverage should report fewer or equal 'new' statements than block-based")
+
+	// Calculate coverage percentages
+	var coverageWithoutDiff, coverageWithDiff float64
+	if totalNewWithoutDiff > 0 {
+		coverageWithoutDiff = float64(coveredNewWithoutDiff) / float64(totalNewWithoutDiff) * 100
+	}
+	if totalNewWithDiff > 0 {
+		coverageWithDiff = float64(coveredNewWithDiff) / float64(totalNewWithDiff) * 100
+	}
+
+	// Log the results for visibility
+	t.Logf("Without diff (block-based): %d/%d statements = %.2f%% coverage",
+		coveredNewWithoutDiff, totalNewWithoutDiff, coverageWithoutDiff)
+	t.Logf("With diff (line-based): %d/%d statements = %.2f%% coverage",
+		coveredNewWithDiff, totalNewWithDiff, coverageWithDiff)
+
+	// Both should have some coverage
+	if totalNewWithoutDiff > 0 {
+		assert.Greater(t, coverageWithoutDiff, 0.0, "Should have some coverage without diff")
+	}
+
+	// With diff, we should have detected the new lines we specified
+	// The coverage might be 0% if those specific lines aren't covered, which is fine
+	// The important thing is that we're only counting the lines from the diff
+	t.Logf("Diff-based correctly identified %d statements in the changed lines", totalNewWithDiff)
+}
+
+func TestReport_WithGitDiff_EntireFileNew(t *testing.T) {
+	// Test case: entire file is new (not in old coverage)
+	oldCov := &Coverage{
+		Files:       map[string]*Profile{},
+		TotalStmt:   0,
+		CoveredStmt: 0,
+	}
+
+	newCov, err := ParseCoverage("testdata/01-new-coverage.txt")
+	require.NoError(t, err)
+
+	changedFiles := []string{"github.com/fgrosse/prioqueue/min_heap.go"}
+
+	// Create diff indicating the entire file is new
+	diffInfo := &DiffInfo{
+		Files: map[string]*FileDiff{
+			"github.com/fgrosse/prioqueue/min_heap.go": {
+				FileName:      "github.com/fgrosse/prioqueue/min_heap.go",
+				AddedLines:    map[int]bool{}, // Empty - will be treated as entire file
+				ModifiedLines: map[int]bool{},
+			},
+		},
+	}
+
+	report := NewReport(oldCov, newCov, changedFiles)
+	report.DiffInfo = diffInfo
+
+	totalNew, coveredNew := report.calculateNewCodeCoverage()
+
+	// When entire file is new, should count all statements
+	minHeapProfile := newCov.Files["github.com/fgrosse/prioqueue/min_heap.go"]
+	require.NotNil(t, minHeapProfile)
+
+	assert.Equal(t, minHeapProfile.TotalStmt, totalNew,
+		"Should count all statements when entire file is new")
+	assert.Equal(t, minHeapProfile.CoveredStmt, coveredNew,
+		"Should count all covered statements when entire file is new")
+}
+
+func TestReport_WithGitDiff_NoMatchingLines(t *testing.T) {
+	// Test case: diff indicates changes but no coverage blocks match those lines
+	oldCov, err := ParseCoverage("testdata/01-old-coverage.txt")
+	require.NoError(t, err)
+
+	newCov, err := ParseCoverage("testdata/01-new-coverage.txt")
+	require.NoError(t, err)
+
+	changedFiles, err := ParseChangedFiles("testdata/01-changed-files.json", "github.com/fgrosse/prioqueue")
+	require.NoError(t, err)
+
+	// Create diff with lines that don't match any coverage blocks
+	diffInfo := &DiffInfo{
+		Files: map[string]*FileDiff{
+			"github.com/fgrosse/prioqueue/min_heap.go": {
+				FileName: "github.com/fgrosse/prioqueue/min_heap.go",
+				AddedLines: map[int]bool{
+					1: true, // Comment or package line, no coverage block
+					2: true,
+				},
+				ModifiedLines: map[int]bool{},
+			},
+		},
+	}
+
+	report := NewReport(oldCov, newCov, changedFiles)
+	report.DiffInfo = diffInfo
+
+	totalNew, coveredNew := report.calculateNewCodeCoverage()
+
+	// Should report 0 new statements since no blocks contain the changed lines
+	assert.Equal(t, int64(0), totalNew, "Should report 0 new statements when no blocks match")
+	assert.Equal(t, int64(0), coveredNew, "Should report 0 covered statements when no blocks match")
+}
+
+func TestReport_WithGitDiff_Markdown(t *testing.T) {
+	// Test that the markdown report works correctly with diff information
+	oldCov, err := ParseCoverage("testdata/01-old-coverage.txt")
+	require.NoError(t, err)
+
+	newCov, err := ParseCoverage("testdata/01-new-coverage.txt")
+	require.NoError(t, err)
+
+	changedFiles, err := ParseChangedFiles("testdata/01-changed-files.json", "github.com/fgrosse/prioqueue")
+	require.NoError(t, err)
+
+	// Create a realistic diff
+	diffInfo := &DiffInfo{
+		Files: map[string]*FileDiff{
+			"github.com/fgrosse/prioqueue/min_heap.go": {
+				FileName: "github.com/fgrosse/prioqueue/min_heap.go",
+				AddedLines: map[int]bool{
+					48: true,
+					49: true,
+					50: true,
+				},
+				ModifiedLines: map[int]bool{},
+			},
+		},
+	}
+
+	report := NewReport(oldCov, newCov, changedFiles)
+	report.DiffInfo = diffInfo
+
+	markdown := report.Markdown()
+
+	// Verify the markdown contains expected sections
+	assert.Contains(t, markdown, "### Coverage Report", "Should contain title")
+	assert.Contains(t, markdown, "Overall Coverage Summary", "Should contain summary")
+	assert.Contains(t, markdown, "New Code", "Should contain new code coverage")
+	assert.Contains(t, markdown, "Impacted Packages", "Should contain package details")
+
+	// Verify it doesn't crash and produces valid output
+	assert.NotEmpty(t, markdown, "Markdown should not be empty")
+	assert.Greater(t, len(markdown), 100, "Markdown should be substantial")
+}

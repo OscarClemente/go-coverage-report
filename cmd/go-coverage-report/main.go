@@ -28,6 +28,8 @@ ARGUMENTS:
   CHANGED_FILES_FILE  The path to the file containing the list of changed files encoded as JSON string array
 
 OPTIONS:
+  -diff string
+        Path to git diff file (unified diff format) for accurate line-level coverage calculation
 `, filepath.Base(os.Args[0])))
 
 type options struct {
@@ -35,6 +37,7 @@ type options struct {
 	trim        string
 	format      string
 	minCoverage float64
+	diffFile    string
 }
 
 func main() {
@@ -49,6 +52,7 @@ func main() {
 	flag.String("trim", "", "trim a prefix in the \"Impacted Packages\" column of the markdown report")
 	flag.String("format", "markdown", "output format (currently only 'markdown' is supported)")
 	flag.Float64("min-coverage", 0, "minimum coverage threshold for new code in percentage (0 to disable)")
+	flag.String("diff", "", "path to git diff file (unified diff format) for accurate line-level coverage calculation")
 
 	err := run(programArgs())
 	if err != nil {
@@ -76,6 +80,7 @@ func programArgs() (oldCov, newCov, changedFile string, opts options) {
 		trim:        flag.Lookup("trim").Value.String(),
 		format:      flag.Lookup("format").Value.String(),
 		minCoverage: minCoverage,
+		diffFile:    flag.Lookup("diff").Value.String(),
 	}
 
 	return args[0], args[1], args[2], opts
@@ -102,8 +107,19 @@ func run(oldCovPath, newCovPath, changedFilesPath string, opts options) error {
 		return nil
 	}
 
+	// Parse diff information if provided
+	var diffInfo *DiffInfo
+	if opts.diffFile != "" {
+		diffInfo, err = ParseUnifiedDiff(opts.diffFile)
+		if err != nil {
+			return fmt.Errorf("failed to parse diff file: %w", err)
+		}
+		log.Printf("Using git diff information from %s for accurate line-level coverage", opts.diffFile)
+	}
+
 	report := NewReport(oldCov, newCov, changedFiles)
 	report.MinCoverage = opts.minCoverage
+	report.DiffInfo = diffInfo
 	if opts.trim != "" {
 		report.TrimPrefix(opts.trim)
 	}

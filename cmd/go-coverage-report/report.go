@@ -12,7 +12,8 @@ type Report struct {
 	Old, New        *Coverage
 	ChangedFiles    []string
 	ChangedPackages []string
-	MinCoverage     float64 // Minimum coverage threshold for new code (0 to disable)
+	MinCoverage     float64   // Minimum coverage threshold for new code (0 to disable)
+	DiffInfo        *DiffInfo // Optional: git diff information for line-level coverage
 }
 
 func NewReport(oldCov, newCov *Coverage, changedFiles []string) *Report {
@@ -92,6 +93,12 @@ func (r *Report) PRCoverageInfo() (prCov string, emoji string, totalNew, covered
 
 // calculateNewCodeCoverage calculates coverage for statements that are new in this PR
 func (r *Report) calculateNewCodeCoverage() (totalNew, coveredNew int64) {
+	// If we have diff information, use it for accurate line-level coverage
+	if r.DiffInfo != nil {
+		return r.calculateNewCodeCoverageFromDiff()
+	}
+
+	// Fallback to block-based comparison (old behavior)
 	for _, fileName := range r.ChangedFiles {
 		oldProfile := r.Old.Files[fileName]
 		newProfile := r.New.Files[fileName]
@@ -118,6 +125,50 @@ func (r *Report) calculateNewCodeCoverage() (totalNew, coveredNew int64) {
 				totalNew += int64(newBlock.NumStmt)
 				if newBlock.Count > 0 {
 					coveredNew += int64(newBlock.NumStmt)
+				}
+			}
+		}
+	}
+
+	return totalNew, coveredNew
+}
+
+// calculateNewCodeCoverageFromDiff calculates coverage using git diff information
+// This is more accurate as it only considers lines that were actually added/modified
+func (r *Report) calculateNewCodeCoverageFromDiff() (totalNew, coveredNew int64) {
+	for _, fileName := range r.ChangedFiles {
+		oldProfile := r.Old.Files[fileName]
+		newProfile := r.New.Files[fileName]
+
+		if newProfile == nil {
+			continue // File was deleted or no coverage data
+		}
+
+		// If file is entirely new (not in old coverage), count all statements
+		if oldProfile == nil {
+			totalNew += newProfile.TotalStmt
+			coveredNew += newProfile.CoveredStmt
+			continue
+		}
+
+		// Check if we have diff info for this file
+		fileDiff, hasDiffInfo := r.DiffInfo.Files[fileName]
+		if !hasDiffInfo || len(fileDiff.AddedLines) == 0 {
+			// No diff info for this file, fall back to counting all blocks as new
+			// This handles the case where diff wasn't generated for this file
+			totalNew += newProfile.TotalStmt
+			coveredNew += newProfile.CoveredStmt
+			continue
+		}
+
+		// Check each block in the new coverage
+		for _, block := range newProfile.Blocks {
+			// Check if this block contains any lines that were added/modified
+			if r.DiffInfo.IsLineInRange(fileName, block.StartLine, block.EndLine) {
+				// This block contains changed lines, count it
+				totalNew += int64(block.NumStmt)
+				if block.Count > 0 {
+					coveredNew += int64(block.NumStmt)
 				}
 			}
 		}
