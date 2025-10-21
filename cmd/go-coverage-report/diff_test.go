@@ -143,3 +143,117 @@ func TestCalculateNewCodeCoverageFromDiff(t *testing.T) {
 	assert.Equal(t, int64(5), totalNew, "Should count 5 new statements")
 	assert.Equal(t, int64(5), coveredNew, "Should count 5 covered new statements")
 }
+
+func TestDiffInfo_PathNormalization(t *testing.T) {
+	// Test that path normalization works correctly
+	// Coverage files have full package paths, but git diff has relative paths
+	diffInfo := &DiffInfo{
+		Files: map[string]*FileDiff{
+			"cmd/go-coverage-report/report.go": {
+				FileName: "cmd/go-coverage-report/report.go",
+				AddedLines: map[int]bool{
+					10: true,
+					20: true,
+				},
+				ModifiedLines: map[int]bool{},
+			},
+			"internal/utils/helper.go": {
+				FileName: "internal/utils/helper.go",
+				AddedLines: map[int]bool{
+					5: true,
+				},
+				ModifiedLines: map[int]bool{},
+			},
+		},
+	}
+
+	// Test exact match
+	assert.True(t, diffInfo.IsLineAdded("cmd/go-coverage-report/report.go", 10),
+		"Exact path match should work")
+
+	// Test with package prefix (coverage file format)
+	assert.True(t, diffInfo.IsLineAdded("github.com/user/repo/cmd/go-coverage-report/report.go", 10),
+		"Should match when coverage path has package prefix")
+	assert.True(t, diffInfo.IsLineAdded("github.com/user/repo/cmd/go-coverage-report/report.go", 20),
+		"Should match when coverage path has package prefix")
+
+	// Test with different package prefix
+	assert.True(t, diffInfo.IsLineAdded("github.com/another/project/internal/utils/helper.go", 5),
+		"Should match with different package prefix")
+
+	// Test non-matching paths
+	assert.False(t, diffInfo.IsLineAdded("github.com/user/repo/cmd/go-coverage-report/report.go", 99),
+		"Non-added line should return false")
+	assert.False(t, diffInfo.IsLineAdded("github.com/user/repo/nonexistent.go", 10),
+		"Non-existent file should return false")
+
+	// Test IsLineInRange with normalized paths
+	assert.True(t, diffInfo.IsLineInRange("github.com/user/repo/cmd/go-coverage-report/report.go", 5, 15),
+		"Range should match with normalized path")
+	assert.False(t, diffInfo.IsLineInRange("github.com/user/repo/cmd/go-coverage-report/report.go", 30, 40),
+		"Range without added lines should return false")
+}
+
+func TestCalculateNewCodeCoverageFromDiff_PathMismatch(t *testing.T) {
+	// Test the real-world scenario where coverage has full paths but diff has relative paths
+	oldCov := &Coverage{
+		Files: map[string]*Profile{
+			"github.com/test/cmd/app/main.go": {
+				FileName:    "github.com/test/cmd/app/main.go",
+				TotalStmt:   10,
+				CoveredStmt: 8,
+				Blocks: []ProfileBlock{
+					{StartLine: 1, EndLine: 10, NumStmt: 10, Count: 1},
+				},
+			},
+		},
+		TotalStmt:   10,
+		CoveredStmt: 8,
+	}
+
+	newCov := &Coverage{
+		Files: map[string]*Profile{
+			"github.com/test/cmd/app/main.go": {
+				FileName:    "github.com/test/cmd/app/main.go",
+				TotalStmt:   15,
+				CoveredStmt: 12,
+				Blocks: []ProfileBlock{
+					{StartLine: 1, EndLine: 10, NumStmt: 10, Count: 1},
+					{StartLine: 11, EndLine: 15, NumStmt: 5, Count: 1}, // New block
+				},
+			},
+		},
+		TotalStmt:   15,
+		CoveredStmt: 12,
+	}
+
+	// Diff has relative paths (as git diff produces)
+	diffInfo := &DiffInfo{
+		Files: map[string]*FileDiff{
+			"cmd/app/main.go": {
+				FileName: "cmd/app/main.go",
+				AddedLines: map[int]bool{
+					11: true,
+					12: true,
+					13: true,
+					14: true,
+					15: true,
+				},
+				ModifiedLines: map[int]bool{},
+			},
+		},
+	}
+
+	report := &Report{
+		Old:          oldCov,
+		New:          newCov,
+		ChangedFiles: []string{"github.com/test/cmd/app/main.go"},
+		DiffInfo:     diffInfo,
+	}
+
+	totalNew, coveredNew := report.calculateNewCodeCoverageFromDiff()
+
+	// Should correctly match paths and count only the new block
+	assert.Equal(t, int64(5), totalNew, "Should count 5 new statements despite path mismatch")
+	assert.Equal(t, int64(5), coveredNew, "Should count 5 covered new statements despite path mismatch")
+}

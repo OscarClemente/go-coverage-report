@@ -137,14 +137,42 @@ func ParseUnifiedDiff(filename string) (*DiffInfo, error) {
 	return diffInfo, scanner.Err()
 }
 
-// IsLineAdded checks if a specific line was added in the diff
-func (d *DiffInfo) IsLineAdded(fileName string, lineNum int) bool {
+// findFileDiff tries to find a FileDiff for the given fileName
+// It handles the case where fileName might have a package prefix (e.g., "github.com/user/repo/cmd/file.go")
+// while the diff has relative paths (e.g., "cmd/file.go")
+func (d *DiffInfo) findFileDiff(fileName string) *FileDiff {
 	if d == nil {
-		return false
+		return nil
 	}
 
-	fileDiff, ok := d.Files[fileName]
-	if !ok {
+	// Try exact match first
+	if fileDiff, ok := d.Files[fileName]; ok {
+		return fileDiff
+	}
+
+	// Try to match by suffix - the diff path should be a suffix of the coverage path
+	// Coverage: "github.com/user/repo/cmd/file.go"
+	// Diff:     "cmd/file.go"
+	for diffPath, fileDiff := range d.Files {
+		if strings.HasSuffix(fileName, diffPath) {
+			return fileDiff
+		}
+	}
+
+	// Try the reverse - maybe the coverage path is shorter
+	for diffPath, fileDiff := range d.Files {
+		if strings.HasSuffix(diffPath, fileName) {
+			return fileDiff
+		}
+	}
+
+	return nil
+}
+
+// IsLineAdded checks if a specific line was added in the diff
+func (d *DiffInfo) IsLineAdded(fileName string, lineNum int) bool {
+	fileDiff := d.findFileDiff(fileName)
+	if fileDiff == nil {
 		return false
 	}
 
@@ -153,12 +181,8 @@ func (d *DiffInfo) IsLineAdded(fileName string, lineNum int) bool {
 
 // IsLineInRange checks if any line in the range [startLine, endLine] was added
 func (d *DiffInfo) IsLineInRange(fileName string, startLine, endLine int) bool {
-	if d == nil {
-		return false
-	}
-
-	fileDiff, ok := d.Files[fileName]
-	if !ok {
+	fileDiff := d.findFileDiff(fileName)
+	if fileDiff == nil {
 		return false
 	}
 

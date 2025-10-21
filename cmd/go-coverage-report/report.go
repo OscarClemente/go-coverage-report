@@ -152,8 +152,8 @@ func (r *Report) calculateNewCodeCoverageFromDiff() (totalNew, coveredNew int64)
 		}
 
 		// Check if we have diff info for this file
-		fileDiff, hasDiffInfo := r.DiffInfo.Files[fileName]
-		if !hasDiffInfo || len(fileDiff.AddedLines) == 0 {
+		fileDiff := r.DiffInfo.findFileDiff(fileName)
+		if fileDiff == nil || len(fileDiff.AddedLines) == 0 {
 			// No diff info for this file, fall back to counting all blocks as new
 			// This handles the case where diff wasn't generated for this file
 			totalNew += newProfile.TotalStmt
