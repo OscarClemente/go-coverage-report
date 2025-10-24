@@ -433,3 +433,222 @@ func TestReport_WithGitDiff_Markdown(t *testing.T) {
 	assert.NotEmpty(t, markdown, "Markdown should not be empty")
 	assert.Greater(t, len(markdown), 100, "Markdown should be substantial")
 }
+
+func TestReport_WithGitDiff_OnlyComments(t *testing.T) {
+	// Test case: diff only contains changes to comments (lines 1-10 typically)
+	// These lines won't have coverage blocks, so should result in 0 new statements
+	oldCov, err := ParseCoverage("testdata/01-old-coverage.txt")
+	require.NoError(t, err)
+
+	newCov, err := ParseCoverage("testdata/01-new-coverage.txt")
+	require.NoError(t, err)
+
+	changedFiles := []string{"github.com/fgrosse/prioqueue/min_heap.go"}
+
+	// Create diff with only comment lines (typically lines 1-10 in a Go file)
+	diffInfo := &DiffInfo{
+		Files: map[string]*FileDiff{
+			"github.com/fgrosse/prioqueue/min_heap.go": {
+				FileName: "github.com/fgrosse/prioqueue/min_heap.go",
+				AddedLines: map[int]bool{
+					1: true, // Package declaration
+					2: true, // Empty line or comment
+					3: true, // Import or comment
+					4: true, // Comment
+					5: true, // Comment
+				},
+				ModifiedLines: map[int]bool{},
+			},
+		},
+	}
+
+	report := NewReport(oldCov, newCov, changedFiles)
+	report.DiffInfo = diffInfo
+
+	totalNew, coveredNew := report.calculateNewCodeCoverage()
+
+	// Comments don't have coverage blocks, so should be 0
+	assert.Equal(t, int64(0), totalNew,
+		"Should report 0 new statements when only comments changed")
+	assert.Equal(t, int64(0), coveredNew,
+		"Should report 0 covered statements when only comments changed")
+}
+
+func TestReport_WithGitDiff_NonGoFiles(t *testing.T) {
+	// Test case: changed files include non-Go files (README.md, .yaml, etc.)
+	// These should be ignored since they won't be in the coverage data
+	oldCov, err := ParseCoverage("testdata/01-old-coverage.txt")
+	require.NoError(t, err)
+
+	newCov, err := ParseCoverage("testdata/01-new-coverage.txt")
+	require.NoError(t, err)
+
+	// Include both Go and non-Go files in changed files
+	changedFiles := []string{
+		"github.com/fgrosse/prioqueue/min_heap.go",
+		"github.com/fgrosse/prioqueue/README.md",
+		"github.com/fgrosse/prioqueue/.github/workflows/ci.yml",
+		"github.com/fgrosse/prioqueue/docs/architecture.md",
+	}
+
+	// Diff includes changes to non-Go files
+	diffInfo := &DiffInfo{
+		Files: map[string]*FileDiff{
+			"github.com/fgrosse/prioqueue/min_heap.go": {
+				FileName: "github.com/fgrosse/prioqueue/min_heap.go",
+				AddedLines: map[int]bool{
+					48: true,
+					49: true,
+				},
+				ModifiedLines: map[int]bool{},
+			},
+			"github.com/fgrosse/prioqueue/README.md": {
+				FileName: "github.com/fgrosse/prioqueue/README.md",
+				AddedLines: map[int]bool{
+					10: true,
+					11: true,
+					12: true,
+				},
+				ModifiedLines: map[int]bool{},
+			},
+			"github.com/fgrosse/prioqueue/.github/workflows/ci.yml": {
+				FileName: "github.com/fgrosse/prioqueue/.github/workflows/ci.yml",
+				AddedLines: map[int]bool{
+					5: true,
+				},
+				ModifiedLines: map[int]bool{},
+			},
+		},
+	}
+
+	report := NewReport(oldCov, newCov, changedFiles)
+	report.DiffInfo = diffInfo
+
+	totalNew, coveredNew := report.calculateNewCodeCoverage()
+
+	// Should only count the Go file changes, non-Go files should be ignored
+	// because they won't have coverage profiles
+	assert.Greater(t, totalNew, int64(0),
+		"Should count statements from Go files")
+
+	// The non-Go files shouldn't cause any errors or be counted
+	// We can't assert exact numbers without knowing the coverage blocks,
+	// but we can verify it doesn't crash and produces reasonable output
+	t.Logf("Counted %d/%d new statements from Go files (non-Go files ignored)", coveredNew, totalNew)
+}
+
+func TestReport_WithGitDiff_MixedCommentsAndCode(t *testing.T) {
+	// Test case: diff contains both comment changes and code changes
+	// Only the code changes should be counted
+	oldCov := &Coverage{
+		Files: map[string]*Profile{
+			"github.com/test/file.go": {
+				FileName:    "github.com/test/file.go",
+				TotalStmt:   10,
+				CoveredStmt: 8,
+				Blocks: []ProfileBlock{
+					{StartLine: 10, EndLine: 15, NumStmt: 5, Count: 1},
+					{StartLine: 20, EndLine: 25, NumStmt: 5, Count: 1},
+				},
+			},
+		},
+		TotalStmt:   10,
+		CoveredStmt: 8,
+	}
+
+	newCov := &Coverage{
+		Files: map[string]*Profile{
+			"github.com/test/file.go": {
+				FileName:    "github.com/test/file.go",
+				TotalStmt:   15,
+				CoveredStmt: 12,
+				Blocks: []ProfileBlock{
+					{StartLine: 10, EndLine: 15, NumStmt: 5, Count: 1},
+					{StartLine: 20, EndLine: 25, NumStmt: 5, Count: 1},
+					{StartLine: 30, EndLine: 35, NumStmt: 5, Count: 1}, // New block
+				},
+			},
+		},
+		TotalStmt:   15,
+		CoveredStmt: 12,
+	}
+
+	// Diff includes both comment lines (1-5) and code lines (30-35)
+	diffInfo := &DiffInfo{
+		Files: map[string]*FileDiff{
+			"github.com/test/file.go": {
+				FileName: "github.com/test/file.go",
+				AddedLines: map[int]bool{
+					1:  true, // Package declaration
+					2:  true, // Comment
+					3:  true, // Comment
+					4:  true, // Import
+					5:  true, // Empty line
+					30: true, // Actual code
+					31: true, // Actual code
+					32: true, // Actual code
+					33: true, // Actual code
+					34: true, // Actual code
+					35: true, // Actual code
+				},
+				ModifiedLines: map[int]bool{},
+			},
+		},
+	}
+
+	report := &Report{
+		Old:          oldCov,
+		New:          newCov,
+		ChangedFiles: []string{"github.com/test/file.go"},
+		DiffInfo:     diffInfo,
+	}
+
+	totalNew, coveredNew := report.calculateNewCodeCoverage()
+
+	// Should only count the block that overlaps with lines 30-35
+	// Lines 1-5 (comments) don't have coverage blocks, so shouldn't be counted
+	assert.Equal(t, int64(5), totalNew,
+		"Should only count statements from code blocks, not comments")
+	assert.Equal(t, int64(5), coveredNew,
+		"Should only count covered statements from code blocks, not comments")
+}
+
+func TestReport_WithGitDiff_OnlyDeletedLines(t *testing.T) {
+	// Test case: diff only contains deleted lines (no additions)
+	// This should result in 0 new statements
+	oldCov, err := ParseCoverage("testdata/01-old-coverage.txt")
+	require.NoError(t, err)
+
+	newCov, err := ParseCoverage("testdata/01-new-coverage.txt")
+	require.NoError(t, err)
+
+	changedFiles := []string{"github.com/fgrosse/prioqueue/min_heap.go"}
+
+	// Create diff with no added lines (empty AddedLines map)
+	diffInfo := &DiffInfo{
+		Files: map[string]*FileDiff{
+			"github.com/fgrosse/prioqueue/min_heap.go": {
+				FileName:      "github.com/fgrosse/prioqueue/min_heap.go",
+				AddedLines:    map[int]bool{}, // No additions
+				ModifiedLines: map[int]bool{}, // No modifications
+			},
+		},
+	}
+
+	report := NewReport(oldCov, newCov, changedFiles)
+	report.DiffInfo = diffInfo
+
+	totalNew, coveredNew := report.calculateNewCodeCoverage()
+
+	// When a file is in changed files but has no added lines in diff,
+	// it falls back to counting all statements (this is the current behavior)
+	// This might seem counterintuitive, but it handles cases where diff parsing
+	// might have failed or the file was renamed
+	minHeapProfile := newCov.Files["github.com/fgrosse/prioqueue/min_heap.go"]
+	require.NotNil(t, minHeapProfile)
+
+	assert.Equal(t, minHeapProfile.TotalStmt, totalNew,
+		"Should fall back to counting all statements when no added lines in diff")
+	assert.Equal(t, minHeapProfile.CoveredStmt, coveredNew,
+		"Should fall back to counting all covered statements when no added lines in diff")
+}
