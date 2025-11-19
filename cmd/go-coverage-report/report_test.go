@@ -29,7 +29,38 @@ func TestReport_Markdown(t *testing.T) {
 | **Total** | 100.00% | 90.20% | **-9.80%** | :thumbsdown: |
 | **New Code** | N/A | 85.71% | 42/49 statements | :tada: |
 
+| **Statements** | Total | Covered | Missed |
+|---|---|---|---|
+| **Old** | 100 | 100 | 0 |
+| **New** | 102 (+2) | 92 (-8) | 10 |
+
+---
+
 <details>
+
+<summary>Impacted Packages</summary>
+
+| Impacted Packages | Coverage Δ | :robot: |
+|-------------------|------------|---------|
+| github.com/fgrosse/prioqueue | 90.20% (**-9.80%**) | :thumbsdown: |
+| github.com/fgrosse/prioqueue/foo/bar | 0.00% (ø) |  |
+
+</details>
+
+<details>
+
+<summary>Coverage by file</summary>
+
+### Changed files (no unit tests)
+
+| Changed File | Coverage Δ | Total | Covered | Missed | :robot: |
+|--------------|------------|-------|---------|--------|---------|
+| github.com/fgrosse/prioqueue/foo/bar/baz.go | 0.00% (ø) | 0 | 0 | 0 |  |
+| github.com/fgrosse/prioqueue/min_heap.go | 80.77% (**-19.23%**) | 52 (+2) | 42 (-8) | 10 (+10) | :skull:  |
+
+_Please note that the "Total", "Covered", and "Missed" counts above refer to ***code statements*** instead of lines of code. The value in brackets refers to the test coverage of that file in the old version of the code._
+
+</details><details>
 
 <summary>New Code Coverage Details</summary>
 
@@ -74,38 +105,7 @@ This section shows the coverage status of each new code block added in this PR.
 
 </details>
 
-| **Statements** | Total | Covered | Missed |
-|---|---|---|---|
-| **Old** | 100 | 100 | 0 |
-| **New** | 102 (+2) | 92 (-8) | 10 |
-
----
-
-<details>
-
-<summary>Impacted Packages</summary>
-
-| Impacted Packages | Coverage Δ | :robot: |
-|-------------------|------------|---------|
-| github.com/fgrosse/prioqueue | 90.20% (**-9.80%**) | :thumbsdown: |
-| github.com/fgrosse/prioqueue/foo/bar | 0.00% (ø) |  |
-
-</details>
-
-<details>
-
-<summary>Coverage by file</summary>
-
-### Changed files (no unit tests)
-
-| Changed File | Coverage Δ | Total | Covered | Missed | :robot: |
-|--------------|------------|-------|---------|--------|---------|
-| github.com/fgrosse/prioqueue/foo/bar/baz.go | 0.00% (ø) | 0 | 0 | 0 |  |
-| github.com/fgrosse/prioqueue/min_heap.go | 80.77% (**-19.23%**) | 52 (+2) | 42 (-8) | 10 (+10) | :skull:  |
-
-_Please note that the "Total", "Covered", and "Missed" counts above refer to ***code statements*** instead of lines of code. The value in brackets refers to the test coverage of that file in the old version of the code._
-
-</details>`
+`
 	assert.Equal(t, expected, actual)
 }
 
@@ -229,7 +229,38 @@ func TestReport_Markdown_WithFailedThreshold(t *testing.T) {
 > [!WARNING]
 > **Coverage threshold not met:** New code coverage is **85.71%**, which is below the required threshold of **90.00%**.
 
+| **Statements** | Total | Covered | Missed |
+|---|---|---|---|
+| **Old** | 100 | 100 | 0 |
+| **New** | 102 (+2) | 92 (-8) | 10 |
+
+---
+
 <details>
+
+<summary>Impacted Packages</summary>
+
+| Impacted Packages | Coverage Δ | :robot: |
+|-------------------|------------|---------|
+| github.com/fgrosse/prioqueue | 90.20% (**-9.80%**) | :thumbsdown: |
+| github.com/fgrosse/prioqueue/foo/bar | 0.00% (ø) |  |
+
+</details>
+
+<details>
+
+<summary>Coverage by file</summary>
+
+### Changed files (no unit tests)
+
+| Changed File | Coverage Δ | Total | Covered | Missed | :robot: |
+|--------------|------------|-------|---------|--------|---------|
+| github.com/fgrosse/prioqueue/foo/bar/baz.go | 0.00% (ø) | 0 | 0 | 0 |  |
+| github.com/fgrosse/prioqueue/min_heap.go | 80.77% (**-19.23%**) | 52 (+2) | 42 (-8) | 10 (+10) | :skull:  |
+
+_Please note that the "Total", "Covered", and "Missed" counts above refer to ***code statements*** instead of lines of code. The value in brackets refers to the test coverage of that file in the old version of the code._
+
+</details><details>
 
 <summary>New Code Coverage Details</summary>
 
@@ -274,38 +305,7 @@ This section shows the coverage status of each new code block added in this PR.
 
 </details>
 
-| **Statements** | Total | Covered | Missed |
-|---|---|---|---|
-| **Old** | 100 | 100 | 0 |
-| **New** | 102 (+2) | 92 (-8) | 10 |
-
----
-
-<details>
-
-<summary>Impacted Packages</summary>
-
-| Impacted Packages | Coverage Δ | :robot: |
-|-------------------|------------|---------|
-| github.com/fgrosse/prioqueue | 90.20% (**-9.80%**) | :thumbsdown: |
-| github.com/fgrosse/prioqueue/foo/bar | 0.00% (ø) |  |
-
-</details>
-
-<details>
-
-<summary>Coverage by file</summary>
-
-### Changed files (no unit tests)
-
-| Changed File | Coverage Δ | Total | Covered | Missed | :robot: |
-|--------------|------------|-------|---------|--------|---------|
-| github.com/fgrosse/prioqueue/foo/bar/baz.go | 0.00% (ø) | 0 | 0 | 0 |  |
-| github.com/fgrosse/prioqueue/min_heap.go | 80.77% (**-19.23%**) | 52 (+2) | 42 (-8) | 10 (+10) | :skull:  |
-
-_Please note that the "Total", "Covered", and "Missed" counts above refer to ***code statements*** instead of lines of code. The value in brackets refers to the test coverage of that file in the old version of the code._
-
-</details>`
+`
 	assert.Equal(t, expected, actual)
 }
 
@@ -756,27 +756,68 @@ func TestReport_WithActualSourceCode(t *testing.T) {
 	report := NewReport(oldCov, newCov, changedFiles)
 	actual := report.Markdown()
 
-	// Verify the report contains the details section
-	assert.Contains(t, actual, "<summary>New Code Coverage Details</summary>")
-	assert.Contains(t, actual, "example.com/calculator/math.go")
+	expected := `### Coverage Report - 54.55% (**-45.45%**) - **decrease**
 
-	// Verify it contains actual source code (not just line numbers)
-	assert.Contains(t, actual, "func Divide(a, b int) (int, error) {")
-	assert.Contains(t, actual, `return 0, errors.New("division by zero")`)
-	assert.Contains(t, actual, "func Power(base, exp int) int {")
-	assert.Contains(t, actual, "result := 1")
+#### Overall Coverage Summary
 
-	// Verify covered code has + prefix
-	assert.Contains(t, actual, "+ func Divide(a, b int) (int, error) {")
-	assert.Contains(t, actual, "+ \tif b == 0 {")
+| Metric | Old Coverage | New Coverage | Change | :robot: |
+|--------|-------------|-------------|--------|---------|
+| **Total** | 100.00% | 54.55% | **-45.45%** | :skull: :skull: :skull: :skull:  |
+| **New Code** | N/A | 37.50% | 3/8 statements | :thumbsdown: |
 
-	// Verify uncovered code has - prefix
-	assert.Contains(t, actual, "- func Power(base, exp int) int {")
-	assert.Contains(t, actual, "- \tresult := 1")
+| **Statements** | Total | Covered | Missed |
+|---|---|---|---|
+| **Old** | 3 | 3 | 0 |
+| **New** | 11 (+8) | 6 (+3) | 5 |
 
-	// Verify it's in a diff code block
-	assert.Contains(t, actual, "```diff")
+---
 
-	// Print the actual output for visual inspection
-	t.Logf("Generated report:\n%s", actual)
+<details>
+
+<summary>Impacted Packages</summary>
+
+| Impacted Packages | Coverage Δ | :robot: |
+|-------------------|------------|---------|
+| example.com/calculator | 54.55% (**-45.45%**) | :skull: :skull: :skull: :skull:  |
+
+</details>
+
+<details>
+
+<summary>Coverage by file</summary>
+
+### Changed files (no unit tests)
+
+| Changed File | Coverage Δ | Total | Covered | Missed | :robot: |
+|--------------|------------|-------|---------|--------|---------|
+| example.com/calculator/math.go | 54.55% (**-45.45%**) | 11 (+8) | 6 (+3) | 5 (+5) | :skull: :skull: :skull: :skull:  |
+
+_Please note that the "Total", "Covered", and "Missed" counts above refer to ***code statements*** instead of lines of code. The value in brackets refers to the test coverage of that file in the old version of the code._
+
+</details><details>
+
+<summary>New Code Coverage Details</summary>
+
+This section shows the coverage status of each new code block added in this PR.
+
+#### example.com/calculator/math.go
+
+` + "```diff" + `
++ func Divide(a, b int) (int, error) {
++ 	if b == 0 {
++ 	if b == 0 {
++ 		return 0, errors.New("division by zero")
++ 	}
++ 	return a / b, nil
+- func Power(base, exp int) int {
+- 	result := 1
+- 	result := 1
+- 	for i := 0; i < exp; i++ {
+- 	}
+` + "```" + `
+
+</details>
+
+`
+	assert.Equal(t, expected, actual)
 }
