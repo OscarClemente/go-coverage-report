@@ -1,0 +1,19 @@
+mode: count
+github.com/pentohq/pento/pkg/age/age.go:15.20,17.34 1 1
+github.com/pentohq/pento/pkg/age/age.go:17.34,19.3 1 1
+github.com/pentohq/pento/pkg/age/age.go:21.2,23.37 2 1
+github.com/pentohq/pento/pkg/age/age.go:25.2,26.105 1 1
+github.com/pentohq/pento/pkg/age/age.go:26.105,28.3 1 1
+github.com/pentohq/pento/pkg/age/age.go:30.2,31.38 1 1
+github.com/pentohq/pento/pkg/age/age.go:34.29,36.38 1 1
+github.com/pentohq/pento/pkg/age/age.go:36.38,39.20 2 1
+github.com/pentohq/pento/pkg/age/age.go:39.20,41.4 1 1
+github.com/pentohq/pento/pkg/age/age.go:41.9,41.46 1 1
+github.com/pentohq/pento/pkg/age/age.go:41.46,44.29 2 1
+github.com/pentohq/pento/pkg/age/age.go:44.29,46.4 1 1
+github.com/pentohq/pento/pkg/age/age.go:49.2,51.15 2 1
+github.com/pentohq/pento/pkg/age/age.go:53.25,55.24 2 1
+github.com/pentohq/pento/pkg/age/age.go:55.24,57.3 1 0
+github.com/pentohq/pento/pkg/age/age.go:58.2,58.30 1 0
+github.com/pentohq/pento/pkg/age/age.go:58.30,60.3 1 0
+github.com/pentohq/pento/pkg/age/age.go:61.2,62.36 2 1

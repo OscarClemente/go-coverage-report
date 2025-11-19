@@ -592,19 +592,11 @@ func (r *Report) addNewCodeDetails(report *strings.Builder) {
 		fmt.Fprintln(report)
 		fmt.Fprintln(report, "```diff")
 
-		for _, block := range blocks {
-			// If we have actual source lines, display them
-			if len(block.Lines) > 0 {
-				prefix := "+"
-				if !block.Covered {
-					prefix = "-"
-				}
-
-				for _, line := range block.Lines {
-					fmt.Fprintf(report, "%s %s\n", prefix, line)
-				}
-			} else {
-				// Fallback to line number display if source is not available
+		// Read source file to get actual line content
+		sourceLines, err := readSourceLines(fileName)
+		if err != nil || sourceLines == nil {
+			// Fallback to block-based display if we can't read the source
+			for _, block := range blocks {
 				lineRange := fmt.Sprintf("Lines %d-%d", block.StartLine, block.EndLine)
 				if block.StartLine == block.EndLine {
 					lineRange = fmt.Sprintf("Line %d", block.StartLine)
@@ -616,11 +608,61 @@ func (r *Report) addNewCodeDetails(report *strings.Builder) {
 				}
 
 				if block.Covered {
-					// Green for covered code
 					fmt.Fprintf(report, "+ %s (%d %s) - COVERED ✓\n", lineRange, block.NumStmt, stmtText)
 				} else {
-					// Red for uncovered code
 					fmt.Fprintf(report, "- %s (%d %s) - NOT COVERED ✗\n", lineRange, block.NumStmt, stmtText)
+				}
+			}
+		} else {
+			// Build a map of line number -> coverage status
+			// A line is covered if ANY block that includes it is covered
+			lineCoverage := make(map[int]bool)
+
+			// Get the set of changed lines from diff
+			var changedLines map[int]bool
+			if r.DiffInfo != nil {
+				fileDiff := r.DiffInfo.findFileDiff(fileName)
+				if fileDiff != nil {
+					changedLines = make(map[int]bool)
+					for line := range fileDiff.AddedLines {
+						changedLines[line] = true
+					}
+					for line := range fileDiff.ModifiedLines {
+						changedLines[line] = true
+					}
+				}
+			}
+
+			// For each block, mark all its changed lines with coverage status
+			for _, block := range blocks {
+				for lineNum := block.StartLine; lineNum <= block.EndLine; lineNum++ {
+					// Only consider lines that were actually changed
+					if changedLines != nil && !changedLines[lineNum] {
+						continue
+					}
+
+					// If line is already marked as covered, keep it covered
+					// Otherwise, set it to this block's coverage status
+					if !lineCoverage[lineNum] {
+						lineCoverage[lineNum] = block.Covered
+					}
+				}
+			}
+
+			// Output lines in order
+			var lineNumbers []int
+			for lineNum := range lineCoverage {
+				lineNumbers = append(lineNumbers, lineNum)
+			}
+			sort.Ints(lineNumbers)
+
+			for _, lineNum := range lineNumbers {
+				if lineContent, exists := sourceLines[lineNum]; exists {
+					prefix := "+"
+					if !lineCoverage[lineNum] {
+						prefix = "-"
+					}
+					fmt.Fprintf(report, "%s %s\n", prefix, lineContent)
 				}
 			}
 		}

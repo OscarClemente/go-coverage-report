@@ -805,12 +805,10 @@ This section shows the coverage status of each new code block added in this PR.
 ` + "```diff" + `
 + func Divide(a, b int) (int, error) {
 + 	if b == 0 {
-+ 	if b == 0 {
 + 		return 0, errors.New("division by zero")
 + 	}
 + 	return a / b, nil
 - func Power(base, exp int) int {
-- 	result := 1
 - 	result := 1
 - 	for i := 0; i < exp; i++ {
 - 	}
@@ -963,4 +961,112 @@ func TestReport_ASTBasedCounting(t *testing.T) {
 		coverage := float64(coveredNew) / float64(totalNew) * 100
 		t.Logf("New code coverage: %.2f%%", coverage)
 	}
+}
+
+func TestReport_DuplicateLinesAndIncorrectCoverage(t *testing.T) {
+	// This test replicates the issue where:
+	// 1. Lines appear duplicated in the output (both with + and -)
+	// 2. Lines are marked as covered when they're actually not covered
+	//
+	// The issue occurs when multiple coverage blocks overlap or contain the same lines
+	// with different coverage status
+
+	oldCov, err := ParseCoverage("testdata/04-old-coverage.txt")
+	require.NoError(t, err)
+
+	newCov, err := ParseCoverage("testdata/04-new-coverage.txt")
+	require.NoError(t, err)
+
+	changedFiles, err := ParseChangedFiles("testdata/04-changed-files.json", "github.com/pentohq/pento")
+	require.NoError(t, err)
+
+	diffInfo, err := ParseUnifiedDiff("testdata/04-diff.patch")
+	require.NoError(t, err)
+
+	report := NewReport(oldCov, newCov, changedFiles)
+	report.DiffInfo = diffInfo
+
+	actual := report.Markdown()
+
+	// Check for duplicate lines in the output
+	// The line "if daysSinceBirth > 100000 {" should only appear once
+	ifLineCount := countOccurrences(actual, "if daysSinceBirth > 100000 {")
+	assert.Equal(t, 1, ifLineCount, "The if statement should only appear once in the output, but appeared %d times", ifLineCount)
+
+	// Check that uncovered lines are marked with - not +
+	// Lines 58-60 are NOT covered (count = 0), so they should have - prefix
+	lines := splitLines(actual)
+	for i, line := range lines {
+		if containsString(line, "if daysSinceBirth > 100000 {") {
+			// This line is NOT covered, so it should start with -
+			assert.True(t, hasPrefix(trimSpace(line), "-"),
+				"Line %d: Uncovered code should be prefixed with -, but got: %s", i, line)
+		}
+		if containsString(line, "return daysSinceBirth") && containsString(line, "100000") {
+			// This line is also NOT covered
+			assert.True(t, hasPrefix(trimSpace(line), "-"),
+				"Line %d: Uncovered code should be prefixed with -, but got: %s", i, line)
+		}
+	}
+
+	// Print the actual output for debugging
+	t.Logf("Actual output:\n%s", actual)
+}
+
+// Helper functions to avoid importing strings package issues
+func countOccurrences(s, substr string) int {
+	count := 0
+	for i := 0; i < len(s); {
+		idx := indexString(s[i:], substr)
+		if idx == -1 {
+			break
+		}
+		count++
+		i += idx + len(substr)
+	}
+	return count
+}
+
+func indexString(s, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
+}
+
+func splitLines(s string) []string {
+	var lines []string
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			lines = append(lines, s[start:i])
+			start = i + 1
+		}
+	}
+	if start < len(s) {
+		lines = append(lines, s[start:])
+	}
+	return lines
+}
+
+func containsString(s, substr string) bool {
+	return indexString(s, substr) >= 0
+}
+
+func hasPrefix(s, prefix string) bool {
+	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
+}
+
+func trimSpace(s string) string {
+	start := 0
+	for start < len(s) && (s[start] == ' ' || s[start] == '\t') {
+		start++
+	}
+	end := len(s)
+	for end > start && (s[end-1] == ' ' || s[end-1] == '\t') {
+		end--
+	}
+	return s[start:end]
 }
