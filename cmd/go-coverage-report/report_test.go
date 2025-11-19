@@ -29,6 +29,51 @@ func TestReport_Markdown(t *testing.T) {
 | **Total** | 100.00% | 90.20% | **-9.80%** | :thumbsdown: |
 | **New Code** | N/A | 85.71% | 42/49 statements | :tada: |
 
+<details>
+
+<summary>New Code Coverage Details</summary>
+
+This section shows the coverage status of each new code block added in this PR.
+
+#### github.com/fgrosse/prioqueue/min_heap.go
+
+` + "```diff" + `
+- Line 48 (1 statement) - NOT COVERED ✗
+- Lines 48-50 (1 statement) - NOT COVERED ✗
+- Line 52 (1 statement) - NOT COVERED ✗
++ Lines 57-59 (2 statements) - COVERED ✓
+- Lines 59-61 (1 statement) - NOT COVERED ✗
++ Line 63 (1 statement) - COVERED ✓
++ Lines 68-69 (1 statement) - COVERED ✓
+- Lines 69-71 (1 statement) - NOT COVERED ✗
++ Line 72 (1 statement) - COVERED ✓
++ Lines 76-78 (1 statement) - COVERED ✓
++ Lines 84-86 (1 statement) - COVERED ✓
++ Lines 91-93 (1 statement) - COVERED ✓
++ Lines 98-101 (2 statements) - COVERED ✓
++ Lines 104-107 (2 statements) - COVERED ✓
++ Lines 110-116 (3 statements) - COVERED ✓
++ Lines 116-118 (2 statements) - COVERED ✓
++ Lines 118-121 (1 statement) - COVERED ✓
++ Lines 123-124 (2 statements) - COVERED ✓
++ Lines 135-137 (2 statements) - COVERED ✓
+- Lines 137-139 (1 statement) - NOT COVERED ✗
++ Line 141 (1 statement) - COVERED ✓
++ Lines 145-146 (1 statement) - COVERED ✓
+- Lines 146-148 (1 statement) - NOT COVERED ✗
++ Lines 150-160 (6 statements) - COVERED ✓
++ Lines 165-168 (3 statements) - COVERED ✓
++ Lines 168-171 (2 statements) - COVERED ✓
++ Lines 171-172 (1 statement) - COVERED ✓
++ Line 175 (1 statement) - COVERED ✓
++ Lines 175-177 (1 statement) - COVERED ✓
++ Line 179 (1 statement) - COVERED ✓
++ Lines 179-181 (1 statement) - COVERED ✓
++ Lines 185-188 (2 statements) - COVERED ✓
+` + "```" + `
+
+</details>
+
 | **Statements** | Total | Covered | Missed |
 |---|---|---|---|
 | **Old** | 100 | 100 | 0 |
@@ -183,6 +228,51 @@ func TestReport_Markdown_WithFailedThreshold(t *testing.T) {
 
 > [!WARNING]
 > **Coverage threshold not met:** New code coverage is **85.71%**, which is below the required threshold of **90.00%**.
+
+<details>
+
+<summary>New Code Coverage Details</summary>
+
+This section shows the coverage status of each new code block added in this PR.
+
+#### github.com/fgrosse/prioqueue/min_heap.go
+
+` + "```diff" + `
+- Line 48 (1 statement) - NOT COVERED ✗
+- Lines 48-50 (1 statement) - NOT COVERED ✗
+- Line 52 (1 statement) - NOT COVERED ✗
++ Lines 57-59 (2 statements) - COVERED ✓
+- Lines 59-61 (1 statement) - NOT COVERED ✗
++ Line 63 (1 statement) - COVERED ✓
++ Lines 68-69 (1 statement) - COVERED ✓
+- Lines 69-71 (1 statement) - NOT COVERED ✗
++ Line 72 (1 statement) - COVERED ✓
++ Lines 76-78 (1 statement) - COVERED ✓
++ Lines 84-86 (1 statement) - COVERED ✓
++ Lines 91-93 (1 statement) - COVERED ✓
++ Lines 98-101 (2 statements) - COVERED ✓
++ Lines 104-107 (2 statements) - COVERED ✓
++ Lines 110-116 (3 statements) - COVERED ✓
++ Lines 116-118 (2 statements) - COVERED ✓
++ Lines 118-121 (1 statement) - COVERED ✓
++ Lines 123-124 (2 statements) - COVERED ✓
++ Lines 135-137 (2 statements) - COVERED ✓
+- Lines 137-139 (1 statement) - NOT COVERED ✗
++ Line 141 (1 statement) - COVERED ✓
++ Lines 145-146 (1 statement) - COVERED ✓
+- Lines 146-148 (1 statement) - NOT COVERED ✗
++ Lines 150-160 (6 statements) - COVERED ✓
++ Lines 165-168 (3 statements) - COVERED ✓
++ Lines 168-171 (2 statements) - COVERED ✓
++ Lines 171-172 (1 statement) - COVERED ✓
++ Line 175 (1 statement) - COVERED ✓
++ Lines 175-177 (1 statement) - COVERED ✓
++ Line 179 (1 statement) - COVERED ✓
++ Lines 179-181 (1 statement) - COVERED ✓
++ Lines 185-188 (2 statements) - COVERED ✓
+` + "```" + `
+
+</details>
 
 | **Statements** | Total | Covered | Missed |
 |---|---|---|---|
@@ -651,4 +741,42 @@ func TestReport_WithGitDiff_OnlyDeletedLines(t *testing.T) {
 		"Should fall back to counting all statements when no added lines in diff")
 	assert.Equal(t, minHeapProfile.CoveredStmt, coveredNew,
 		"Should fall back to counting all covered statements when no added lines in diff")
+}
+
+func TestReport_WithActualSourceCode(t *testing.T) {
+	oldCov, err := ParseCoverage("testdata/03-old-coverage.txt")
+	require.NoError(t, err)
+
+	newCov, err := ParseCoverage("testdata/03-new-coverage.txt")
+	require.NoError(t, err)
+
+	changedFiles, err := ParseChangedFiles("testdata/03-changed-files.json", "")
+	require.NoError(t, err)
+
+	report := NewReport(oldCov, newCov, changedFiles)
+	actual := report.Markdown()
+
+	// Verify the report contains the details section
+	assert.Contains(t, actual, "<summary>New Code Coverage Details</summary>")
+	assert.Contains(t, actual, "example.com/calculator/math.go")
+
+	// Verify it contains actual source code (not just line numbers)
+	assert.Contains(t, actual, "func Divide(a, b int) (int, error) {")
+	assert.Contains(t, actual, `return 0, errors.New("division by zero")`)
+	assert.Contains(t, actual, "func Power(base, exp int) int {")
+	assert.Contains(t, actual, "result := 1")
+
+	// Verify covered code has + prefix
+	assert.Contains(t, actual, "+ func Divide(a, b int) (int, error) {")
+	assert.Contains(t, actual, "+ \tif b == 0 {")
+
+	// Verify uncovered code has - prefix
+	assert.Contains(t, actual, "- func Power(base, exp int) int {")
+	assert.Contains(t, actual, "- \tresult := 1")
+
+	// Verify it's in a diff code block
+	assert.Contains(t, actual, "```diff")
+
+	// Print the actual output for visual inspection
+	t.Logf("Generated report:\n%s", actual)
 }
