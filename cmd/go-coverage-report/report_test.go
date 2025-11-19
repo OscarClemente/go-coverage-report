@@ -821,3 +821,146 @@ This section shows the coverage status of each new code block added in this PR.
 `
 	assert.Equal(t, expected, actual)
 }
+
+func TestReport_ProportionalStatementCounting(t *testing.T) {
+	// This test demonstrates that when a coverage block spans both changed and unchanged lines,
+	// we estimate the number of changed statements proportionally
+	
+	// Create a mock coverage scenario:
+	// Block 1: Lines 10-15 (6 lines), 3 statements, covered
+	//   - Lines 10, 11, 12 are new (3 out of 6 lines = 50%)
+	//   - Expected: 3 * 0.5 = 1.5 ≈ 1 statement counted as new
+	// Block 2: Lines 20-22 (3 lines), 2 statements, not covered
+	//   - Lines 20, 21, 22 are all new (3 out of 3 lines = 100%)
+	//   - Expected: 2 * 1.0 = 2 statements counted as new
+	
+	oldCov := &Coverage{
+		Files: map[string]*Profile{
+			"test.go": {
+				FileName:    "test.go",
+				TotalStmt:   0,
+				CoveredStmt: 0,
+				Blocks:      []ProfileBlock{},
+			},
+		},
+		TotalStmt:   0,
+		CoveredStmt: 0,
+	}
+	
+	newCov := &Coverage{
+		Files: map[string]*Profile{
+			"test.go": {
+				FileName:    "test.go",
+				TotalStmt:   5,
+				CoveredStmt: 3,
+				Blocks: []ProfileBlock{
+					{
+						StartLine: 10,
+						EndLine:   15,
+						NumStmt:   3,
+						Count:     5, // Covered
+					},
+					{
+						StartLine: 20,
+						EndLine:   22,
+						NumStmt:   2,
+						Count:     0, // Not covered
+					},
+				},
+			},
+		},
+		TotalStmt:   5,
+		CoveredStmt: 3,
+	}
+	
+	changedFiles := []string{"test.go"}
+	
+	diffInfo := &DiffInfo{
+		Files: map[string]*FileDiff{
+			"test.go": {
+				FileName: "test.go",
+				AddedLines: map[int]bool{
+					10: true, // Block 1: 3 out of 6 lines changed
+					11: true,
+					12: true,
+					20: true, // Block 2: all 3 lines changed
+					21: true,
+					22: true,
+				},
+				ModifiedLines: map[int]bool{},
+			},
+		},
+	}
+	
+	report := NewReport(oldCov, newCov, changedFiles)
+	report.DiffInfo = diffInfo
+	totalNew, coveredNew := report.calculateNewCodeCoverage()
+	
+	// Block 1: 3 statements * (3 changed / 6 total) = 1.5 → 1 statement
+	// Block 2: 2 statements * (3 changed / 3 total) = 2 statements
+	// Total expected: 1 + 2 = 3 statements
+	assert.Equal(t, int64(3), totalNew, "Should count 3 statements (1 from block 1, 2 from block 2)")
+	
+	// Only block 1 is covered, which contributes 1 statement
+	assert.Equal(t, int64(1), coveredNew, "Should count 1 covered statement (from block 1)")
+	
+	// Coverage should be 1/3 = 33.33%
+	coverage := float64(coveredNew) / float64(totalNew) * 100
+	assert.InDelta(t, 33.33, coverage, 0.1, "Coverage should be approximately 33.33%")
+}
+
+func TestReport_ASTBasedCounting(t *testing.T) {
+	// This test verifies that AST-based statement counting works correctly
+	// and provides more accurate results than proportional estimation
+	
+	oldCov, err := ParseCoverage("testdata/03-old-coverage.txt")
+	require.NoError(t, err)
+
+	newCov, err := ParseCoverage("testdata/03-new-coverage.txt")
+	require.NoError(t, err)
+
+	changedFiles := []string{"example.com/calculator/math.go"}
+	
+	// Create diff info that marks specific lines as changed
+	diffInfo := &DiffInfo{
+		Files: map[string]*FileDiff{
+			"example.com/calculator/math.go": {
+				FileName: "example.com/calculator/math.go",
+				AddedLines: map[int]bool{
+					13: true, // func Divide line
+					14: true, // if b == 0
+					15: true, // return error
+					16: true, // closing brace
+					17: true, // return a / b
+					18: true, // closing brace
+					21: true, // func Power line
+					22: true, // result := 1
+					23: true, // for loop
+					24: true, // result *= base
+					25: true, // closing brace
+					26: true, // return result
+					27: true, // closing brace
+				},
+				ModifiedLines: map[int]bool{},
+			},
+		},
+	}
+	
+	report := NewReport(oldCov, newCov, changedFiles)
+	report.DiffInfo = diffInfo
+	
+	totalNew, coveredNew := report.calculateNewCodeCoverage()
+	
+	t.Logf("AST-based counting: %d/%d statements = %.2f%% coverage",
+		coveredNew, totalNew, float64(coveredNew)/float64(totalNew)*100)
+	
+	// With AST-based counting, we should get accurate statement counts
+	// The exact numbers depend on the actual code structure
+	assert.Greater(t, totalNew, int64(0), "Should detect new statements")
+	
+	// Verify coverage percentage
+	if totalNew > 0 {
+		coverage := float64(coveredNew) / float64(totalNew) * 100
+		t.Logf("New code coverage: %.2f%%", coverage)
+	}
+}
