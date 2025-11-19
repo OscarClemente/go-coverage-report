@@ -150,9 +150,24 @@ func (r *Report) calculateNewCodeCoverage() (totalNew, coveredNew int64) {
 func readSourceLines(fileName string) (map[int]string, error) {
 	// Try multiple paths to find the source file
 	pathsToTry := []string{
-		fileName,                            // Original path
-		filepath.Join("testdata", fileName), // For test files
+		fileName, // Original path (e.g., "github.com/user/repo/pkg/file.go")
 	}
+
+	// Try stripping common package path prefixes to get relative path
+	// Coverage files often have full package paths like "github.com/user/repo/pkg/file.go"
+	// but the actual file is at "./pkg/file.go"
+	parts := strings.Split(fileName, "/")
+	for i := range parts {
+		if i > 0 {
+			// Try progressively shorter paths
+			// e.g., "user/repo/pkg/file.go", "repo/pkg/file.go", "pkg/file.go"
+			relativePath := filepath.Join(parts[i:]...)
+			pathsToTry = append(pathsToTry, relativePath)
+		}
+	}
+
+	// Also try testdata directory (for test files)
+	pathsToTry = append(pathsToTry, filepath.Join("testdata", fileName))
 
 	var file *os.File
 	var err error
@@ -415,6 +430,7 @@ func (r *Report) Markdown() string {
 	r.addOverallCoverageSummary(report)
 	r.addPackageDetails(report)
 	r.addFileDetails(report)
+	r.addNewCodeDetailsSection(report)
 
 	return report.String()
 }
@@ -447,11 +463,6 @@ func (r *Report) addOverallCoverageSummary(report *strings.Builder) {
 		}
 	}
 
-	// Add detailed new code coverage breakdown if there's new code
-	if totalNew > 0 {
-		r.addNewCodeDetails(report)
-	}
-
 	// Add statements summary
 	oldStmt := r.Old.TotalStmt
 	newStmt := r.New.TotalStmt
@@ -480,6 +491,17 @@ func (r *Report) addOverallCoverageSummary(report *strings.Builder) {
 	fmt.Fprintf(report, "| **Old** | %d | %d | %d |\n", oldStmt, oldCovered, r.Old.MissedStmt)
 	fmt.Fprintf(report, "| **New** | %d%s | %d%s | %d |\n", newStmt, stmtChangeStr, newCovered, coveredChangeStr, r.New.MissedStmt)
 	fmt.Fprintln(report)
+}
+
+// addNewCodeDetailsSection adds the new code coverage details section at the end of the report
+func (r *Report) addNewCodeDetailsSection(report *strings.Builder) {
+	// Check if there's new code to report
+	totalNew, _ := r.calculateNewCodeCoverage()
+	if totalNew == 0 {
+		return
+	}
+
+	r.addNewCodeDetails(report)
 }
 
 // addNewCodeDetails adds a detailed breakdown of new code coverage
