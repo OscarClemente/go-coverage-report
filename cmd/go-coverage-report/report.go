@@ -150,20 +150,20 @@ func (r *Report) calculateNewCodeCoverage() (totalNew, coveredNew int64) {
 func readSourceLines(fileName string) (map[int]string, error) {
 	// Try multiple paths to find the source file
 	pathsToTry := []string{
-		fileName,                              // Original path
-		filepath.Join("testdata", fileName),   // For test files
+		fileName,                            // Original path
+		filepath.Join("testdata", fileName), // For test files
 	}
 
 	var file *os.File
 	var err error
-	
+
 	for _, path := range pathsToTry {
 		file, err = os.Open(path)
 		if err == nil {
 			break
 		}
 	}
-	
+
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +199,7 @@ func (r *Report) getNewCodeBlocks() []NewCodeBlock {
 	fileCache := make(map[string]map[int]string)
 	for i := range blocks {
 		block := &blocks[i]
-		
+
 		// Check if we've already read this file
 		sourceLines, ok := fileCache[block.FileName]
 		if !ok {
@@ -437,7 +437,7 @@ func (r *Report) addOverallCoverageSummary(report *strings.Builder) {
 
 	fmt.Fprintln(report)
 
-	// Add threshold warning if enabled and not met
+	// Add threshold warning if enabled and not met this will make the CI Step fail
 	if r.MinCoverage > 0 && totalNew > 0 {
 		newCodeCoverage := float64(coveredNew) / float64(totalNew) * 100
 		if newCodeCoverage < r.MinCoverage {
@@ -511,7 +511,7 @@ func (r *Report) addNewCodeDetails(report *strings.Builder) {
 
 	for _, fileName := range sortedFiles {
 		blocks := fileBlocks[fileName]
-		
+
 		fmt.Fprintf(report, "#### %s\n", fileName)
 		fmt.Fprintln(report)
 		fmt.Fprintln(report, "```diff")
