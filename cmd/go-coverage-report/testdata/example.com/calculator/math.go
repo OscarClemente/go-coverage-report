@@ -28,4 +28,3 @@ func Power(base, exp int) int {
 	}
 	return result
 }
-

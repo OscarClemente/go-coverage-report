@@ -16,12 +16,16 @@ type Report struct {
 	ChangedPackages []string
 	MinCoverage     float64   // Minimum coverage threshold for new code (0 to disable)
 	DiffInfo        *DiffInfo // Optional: git diff information for line-level coverage
+	astMapper       *StatementLineMapper
+	astCache        map[string]map[int]bool // Cache of file -> statement lines
 }
 
 func NewReport(oldCov, newCov *Coverage, changedFiles []string) *Report {
 	sort.Strings(changedFiles)
 	return &Report{
 		Old:             oldCov,
+		astMapper:       NewStatementLineMapper(),
+		astCache:        make(map[string]map[int]bool),
 		New:             newCov,
 		ChangedFiles:    changedFiles,
 		ChangedPackages: changedPackages(changedFiles),
@@ -211,6 +215,7 @@ func (r *Report) getNewCodeBlocks() []NewCodeBlock {
 	}
 
 	// Try to populate actual source code lines for each block
+	// Only include lines that were actually added/modified according to the diff
 	fileCache := make(map[string]map[int]string)
 	for i := range blocks {
 		block := &blocks[i]
@@ -231,8 +236,20 @@ func (r *Report) getNewCodeBlocks() []NewCodeBlock {
 		}
 
 		if sourceLines != nil {
-			// Extract the lines for this block
+			// Extract only the lines that were actually added/modified
+			// This prevents showing unchanged lines that happen to be in the same coverage block
 			for lineNum := block.StartLine; lineNum <= block.EndLine; lineNum++ {
+				// Only include lines that are in the diff (added or modified)
+				if r.DiffInfo != nil {
+					fileDiff := r.DiffInfo.findFileDiff(block.FileName)
+					if fileDiff != nil {
+						// Only add lines that were actually changed
+						if !fileDiff.AddedLines[lineNum] && !fileDiff.ModifiedLines[lineNum] {
+							continue
+						}
+					}
+				}
+
 				if line, exists := sourceLines[lineNum]; exists {
 					block.Lines = append(block.Lines, line)
 				}
@@ -353,6 +370,11 @@ func (r *Report) getNewCodeBlocksFromDiff() []NewCodeBlock {
 
 // calculateNewCodeCoverageFromDiff calculates coverage using git diff information
 // This is more accurate as it only considers lines that were actually added/modified
+//
+// Note: Go coverage works at the block/statement level, not line level. A coverage block
+// may span multiple lines, and we can't know which specific lines contain which statements.
+// When a block contains both changed and unchanged lines, we estimate the number of changed
+// statements based on the proportion of changed lines in that block.
 func (r *Report) calculateNewCodeCoverageFromDiff() (totalNew, coveredNew int64) {
 	for _, fileName := range r.ChangedFiles {
 		oldProfile := r.Old.Files[fileName]
@@ -381,12 +403,44 @@ func (r *Report) calculateNewCodeCoverageFromDiff() (totalNew, coveredNew int64)
 
 		// Check each block in the new coverage
 		for _, block := range newProfile.Blocks {
-			// Check if this block contains any lines that were added/modified
-			if r.DiffInfo.IsLineInRange(fileName, block.StartLine, block.EndLine) {
-				// This block contains changed lines, count it
-				totalNew += int64(block.NumStmt)
+			// Try AST-based counting first (more accurate)
+			stmtCount, covered := r.countStatementsInBlockUsingAST(fileName, block, fileDiff)
+
+			if stmtCount >= 0 {
+				// AST-based counting succeeded
+				totalNew += int64(stmtCount)
+				if covered {
+					coveredNew += int64(stmtCount)
+				}
+				continue
+			}
+
+			// Fallback to proportional estimation if AST parsing fails
+			changedLinesInBlock := 0
+			totalLinesInBlock := block.EndLine - block.StartLine + 1
+
+			for line := block.StartLine; line <= block.EndLine; line++ {
+				if fileDiff.AddedLines[line] || fileDiff.ModifiedLines[line] {
+					changedLinesInBlock++
+				}
+			}
+
+			// Only count this block if at least one line was changed
+			// Estimate the number of statements that were changed based on the proportion of changed lines
+			if changedLinesInBlock > 0 {
+				// Calculate the proportion of lines that were changed
+				proportion := float64(changedLinesInBlock) / float64(totalLinesInBlock)
+
+				// Estimate the number of statements that were actually new/changed
+				// Round up to ensure we count at least 1 statement if any line changed
+				estimatedStmts := int64(float64(block.NumStmt) * proportion)
+				if estimatedStmts == 0 && changedLinesInBlock > 0 {
+					estimatedStmts = 1
+				}
+
+				totalNew += estimatedStmts
 				if block.Count > 0 {
-					coveredNew += int64(block.NumStmt)
+					coveredNew += estimatedStmts
 				}
 			}
 		}
@@ -711,6 +765,72 @@ func (r *Report) JSON() string {
 	}
 
 	return string(data)
+}
+
+// countStatementsInBlockUsingAST uses AST parsing to accurately count statements
+// in changed lines within a coverage block. Returns -1 if AST parsing fails.
+func (r *Report) countStatementsInBlockUsingAST(fileName string, block ProfileBlock, fileDiff *FileDiff) (count int, covered bool) {
+	// Check if AST mapper is available
+	if r.astMapper == nil {
+		return -1, false
+	}
+
+	// Get or compute statement lines for this file
+	statementLines, ok := r.astCache[fileName]
+	if !ok {
+		// Try to resolve the file path
+		paths := r.resolveFilePath(fileName)
+		var err error
+
+		for _, path := range paths {
+			statementLines, err = r.astMapper.GetStatementLines(path)
+			if err == nil {
+				r.astCache[fileName] = statementLines
+				break
+			}
+		}
+
+		if err != nil {
+			// AST parsing failed, return -1 to indicate fallback needed
+			return -1, false
+		}
+	}
+
+	// Count statements on changed lines within this block
+	count = 0
+	for line := block.StartLine; line <= block.EndLine; line++ {
+		// Check if this line was changed and contains a statement
+		if (fileDiff.AddedLines[line] || fileDiff.ModifiedLines[line]) && statementLines[line] {
+			count++
+		}
+	}
+
+	// If no statements found on changed lines, return -1 to use fallback
+	if count == 0 {
+		return -1, false
+	}
+
+	covered = block.Count > 0
+	return count, covered
+}
+
+// resolveFilePath tries multiple paths to locate the source file
+func (r *Report) resolveFilePath(fileName string) []string {
+	paths := []string{fileName}
+
+	// Try stripping package path prefixes
+	parts := strings.Split(fileName, "/")
+	for i := range parts {
+		if i > 0 {
+			relativePath := filepath.Join(parts[i:]...)
+			paths = append(paths, relativePath)
+		}
+	}
+
+	// Try testdata directory
+	paths = append(paths, filepath.Join("testdata", fileName))
+
+	return paths
 }
 
 func (r *Report) TrimPrefix(prefix string) {
