@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -91,6 +93,16 @@ func (r *Report) PRCoverageInfo() (prCov string, emoji string, totalNew, covered
 	return prCov, emoji, totalNew, coveredNew
 }
 
+// NewCodeBlock represents a block of new code with coverage information
+type NewCodeBlock struct {
+	FileName  string
+	StartLine int
+	EndLine   int
+	NumStmt   int
+	Covered   bool
+	Lines     []string // Actual source code lines
+}
+
 // calculateNewCodeCoverage calculates coverage for statements that are new in this PR
 func (r *Report) calculateNewCodeCoverage() (totalNew, coveredNew int64) {
 	// If we have diff information, use it for accurate line-level coverage
@@ -131,6 +143,197 @@ func (r *Report) calculateNewCodeCoverage() (totalNew, coveredNew int64) {
 	}
 
 	return totalNew, coveredNew
+}
+
+// readSourceLines reads lines from a source file
+// Returns a map of line numbers to their content
+func readSourceLines(fileName string) (map[int]string, error) {
+	// Try multiple paths to find the source file
+	pathsToTry := []string{
+		fileName,                            // Original path
+		filepath.Join("testdata", fileName), // For test files
+	}
+
+	var file *os.File
+	var err error
+
+	for _, path := range pathsToTry {
+		file, err = os.Open(path)
+		if err == nil {
+			break
+		}
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	lines := make(map[int]string)
+	scanner := bufio.NewScanner(file)
+	lineNum := 1
+	for scanner.Scan() {
+		lines[lineNum] = scanner.Text()
+		lineNum++
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return lines, nil
+}
+
+// getNewCodeBlocks returns detailed information about all new code blocks
+func (r *Report) getNewCodeBlocks() []NewCodeBlock {
+	var blocks []NewCodeBlock
+
+	// If we have diff information, use it for accurate line-level coverage
+	if r.DiffInfo != nil {
+		blocks = r.getNewCodeBlocksFromDiff()
+	} else {
+		blocks = r.getNewCodeBlocksFromComparison()
+	}
+
+	// Try to populate actual source code lines for each block
+	fileCache := make(map[string]map[int]string)
+	for i := range blocks {
+		block := &blocks[i]
+
+		// Check if we've already read this file
+		sourceLines, ok := fileCache[block.FileName]
+		if !ok {
+			// Try to read the file
+			var err error
+			sourceLines, err = readSourceLines(block.FileName)
+			if err != nil {
+				// If we can't read the file, just skip adding source lines
+				// This can happen if the file path doesn't exist locally
+				fileCache[block.FileName] = nil
+				continue
+			}
+			fileCache[block.FileName] = sourceLines
+		}
+
+		if sourceLines != nil {
+			// Extract the lines for this block
+			for lineNum := block.StartLine; lineNum <= block.EndLine; lineNum++ {
+				if line, exists := sourceLines[lineNum]; exists {
+					block.Lines = append(block.Lines, line)
+				}
+			}
+		}
+	}
+
+	return blocks
+}
+
+// getNewCodeBlocksFromComparison gets new code blocks by comparing old and new profiles
+func (r *Report) getNewCodeBlocksFromComparison() []NewCodeBlock {
+	var blocks []NewCodeBlock
+
+	for _, fileName := range r.ChangedFiles {
+		oldProfile := r.Old.Files[fileName]
+		newProfile := r.New.Files[fileName]
+
+		if newProfile == nil {
+			continue // File was deleted or no coverage data
+		}
+
+		if oldProfile == nil {
+			// Entire file is new
+			for _, block := range newProfile.Blocks {
+				blocks = append(blocks, NewCodeBlock{
+					FileName:  fileName,
+					StartLine: block.StartLine,
+					EndLine:   block.EndLine,
+					NumStmt:   block.NumStmt,
+					Covered:   block.Count > 0,
+				})
+			}
+			continue
+		}
+
+		// Compare blocks to find new code
+		oldBlocks := makeBlockMap(oldProfile.Blocks)
+
+		for _, newBlock := range newProfile.Blocks {
+			blockKey := fmt.Sprintf("%d:%d-%d:%d", newBlock.StartLine, newBlock.StartCol, newBlock.EndLine, newBlock.EndCol)
+
+			if _, exists := oldBlocks[blockKey]; !exists {
+				// This block is new in this PR
+				blocks = append(blocks, NewCodeBlock{
+					FileName:  fileName,
+					StartLine: newBlock.StartLine,
+					EndLine:   newBlock.EndLine,
+					NumStmt:   newBlock.NumStmt,
+					Covered:   newBlock.Count > 0,
+				})
+			}
+		}
+	}
+
+	return blocks
+}
+
+// getNewCodeBlocksFromDiff gets new code blocks using git diff information
+func (r *Report) getNewCodeBlocksFromDiff() []NewCodeBlock {
+	var blocks []NewCodeBlock
+
+	for _, fileName := range r.ChangedFiles {
+		oldProfile := r.Old.Files[fileName]
+		newProfile := r.New.Files[fileName]
+
+		if newProfile == nil {
+			continue // File was deleted or no coverage data
+		}
+
+		// If file is entirely new (not in old coverage), count all blocks
+		if oldProfile == nil {
+			for _, block := range newProfile.Blocks {
+				blocks = append(blocks, NewCodeBlock{
+					FileName:  fileName,
+					StartLine: block.StartLine,
+					EndLine:   block.EndLine,
+					NumStmt:   block.NumStmt,
+					Covered:   block.Count > 0,
+				})
+			}
+			continue
+		}
+
+		// Check if we have diff info for this file
+		fileDiff := r.DiffInfo.findFileDiff(fileName)
+		if fileDiff == nil || len(fileDiff.AddedLines) == 0 {
+			// No diff info for this file, fall back to counting all blocks as new
+			for _, block := range newProfile.Blocks {
+				blocks = append(blocks, NewCodeBlock{
+					FileName:  fileName,
+					StartLine: block.StartLine,
+					EndLine:   block.EndLine,
+					NumStmt:   block.NumStmt,
+					Covered:   block.Count > 0,
+				})
+			}
+			continue
+		}
+
+		// Check each block in the new coverage
+		for _, block := range newProfile.Blocks {
+			// Check if this block contains any lines that were added/modified
+			if r.DiffInfo.IsLineInRange(fileName, block.StartLine, block.EndLine) {
+				blocks = append(blocks, NewCodeBlock{
+					FileName:  fileName,
+					StartLine: block.StartLine,
+					EndLine:   block.EndLine,
+					NumStmt:   block.NumStmt,
+					Covered:   block.Count > 0,
+				})
+			}
+		}
+	}
+
+	return blocks
 }
 
 // calculateNewCodeCoverageFromDiff calculates coverage using git diff information
@@ -234,7 +437,7 @@ func (r *Report) addOverallCoverageSummary(report *strings.Builder) {
 
 	fmt.Fprintln(report)
 
-	// Add threshold warning if enabled and not met
+	// Add threshold warning if enabled and not met this will make the CI Step fail
 	if r.MinCoverage > 0 && totalNew > 0 {
 		newCodeCoverage := float64(coveredNew) / float64(totalNew) * 100
 		if newCodeCoverage < r.MinCoverage {
@@ -242,6 +445,11 @@ func (r *Report) addOverallCoverageSummary(report *strings.Builder) {
 			fmt.Fprintf(report, "> **Coverage threshold not met:** New code coverage is **%.2f%%**, which is below the required threshold of **%.2f%%**.\n", newCodeCoverage, r.MinCoverage)
 			fmt.Fprintln(report)
 		}
+	}
+
+	// Add detailed new code coverage breakdown if there's new code
+	if totalNew > 0 {
+		r.addNewCodeDetails(report)
 	}
 
 	// Add statements summary
@@ -271,6 +479,81 @@ func (r *Report) addOverallCoverageSummary(report *strings.Builder) {
 	fmt.Fprintln(report, "|---|---|---|---|")
 	fmt.Fprintf(report, "| **Old** | %d | %d | %d |\n", oldStmt, oldCovered, r.Old.MissedStmt)
 	fmt.Fprintf(report, "| **New** | %d%s | %d%s | %d |\n", newStmt, stmtChangeStr, newCovered, coveredChangeStr, r.New.MissedStmt)
+	fmt.Fprintln(report)
+}
+
+// addNewCodeDetails adds a detailed breakdown of new code coverage
+func (r *Report) addNewCodeDetails(report *strings.Builder) {
+	blocks := r.getNewCodeBlocks()
+	if len(blocks) == 0 {
+		return
+	}
+
+	// Group blocks by file
+	fileBlocks := make(map[string][]NewCodeBlock)
+	for _, block := range blocks {
+		fileBlocks[block.FileName] = append(fileBlocks[block.FileName], block)
+	}
+
+	// Sort files for consistent output
+	var sortedFiles []string
+	for fileName := range fileBlocks {
+		sortedFiles = append(sortedFiles, fileName)
+	}
+	sort.Strings(sortedFiles)
+
+	fmt.Fprintln(report, "<details>")
+	fmt.Fprintln(report)
+	fmt.Fprintln(report, "<summary>New Code Coverage Details</summary>")
+	fmt.Fprintln(report)
+	fmt.Fprintln(report, "This section shows the coverage status of each new code block added in this PR.")
+	fmt.Fprintln(report)
+
+	for _, fileName := range sortedFiles {
+		blocks := fileBlocks[fileName]
+
+		fmt.Fprintf(report, "#### %s\n", fileName)
+		fmt.Fprintln(report)
+		fmt.Fprintln(report, "```diff")
+
+		for _, block := range blocks {
+			// If we have actual source lines, display them
+			if len(block.Lines) > 0 {
+				prefix := "+"
+				if !block.Covered {
+					prefix = "-"
+				}
+
+				for _, line := range block.Lines {
+					fmt.Fprintf(report, "%s %s\n", prefix, line)
+				}
+			} else {
+				// Fallback to line number display if source is not available
+				lineRange := fmt.Sprintf("Lines %d-%d", block.StartLine, block.EndLine)
+				if block.StartLine == block.EndLine {
+					lineRange = fmt.Sprintf("Line %d", block.StartLine)
+				}
+
+				stmtText := "statement"
+				if block.NumStmt != 1 {
+					stmtText = "statements"
+				}
+
+				if block.Covered {
+					// Green for covered code
+					fmt.Fprintf(report, "+ %s (%d %s) - COVERED ✓\n", lineRange, block.NumStmt, stmtText)
+				} else {
+					// Red for uncovered code
+					fmt.Fprintf(report, "- %s (%d %s) - NOT COVERED ✗\n", lineRange, block.NumStmt, stmtText)
+				}
+			}
+		}
+
+		fmt.Fprintln(report, "```")
+		fmt.Fprintln(report)
+	}
+
+	fmt.Fprintln(report, "</details>")
 	fmt.Fprintln(report)
 }
 

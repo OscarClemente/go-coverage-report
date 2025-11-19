@@ -1,3 +1,7 @@
+run:
+  skip-dirs:
+    - testdata    # Exclude test data files from linting
+
 linters:
   disable-all: true
   enable:
