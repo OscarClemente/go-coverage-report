@@ -1,0 +1,44 @@
+diff --git a/pkg/age/age.go b/pkg/age/age.go
+index 8ef76ccb3d..8955900e60 100644
+--- a/pkg/age/age.go
++++ b/pkg/age/age.go
+@@ -1,6 +1,10 @@
+ package age
+ 
+-import "github.com/pentohq/pento/pkg/date"
++import (
++	"log/slog"
++
++	"github.com/pentohq/pento/pkg/date"
++)
+ 
+ type Age struct {
+ 	Now       date.Date
+@@ -14,6 +18,10 @@ func (a Age) Years() int {
+ 		return 0
+ 	}
+ 
++	// Random stuff that should not get merged
++	days := a.Days()
++	slog.Error("days", "days", days)
++
+ 	// Now day is the same or after the birthday. That means one more year.
+ 	if a.Now.Month > a.BirthDate.Month || (a.Now.Month == a.BirthDate.Month && a.Now.Day >= a.BirthDate.Day) {
+ 		return a.Now.Year - a.BirthDate.Year
+@@ -42,3 +50,15 @@ func (a Age) Months() int {
+ 
+ 	return months
+ }
++
++func (a Age) Days() int {
++	daysSinceBirth := a.Now.DaysSince(a.BirthDate)
++	if daysSinceBirth < 0 {
++		return 0
++	}
++	if daysSinceBirth > 100000 {
++		return daysSinceBirth
++	}
++	daysInYears := 1 * 365
++	return daysSinceBirth - daysInYears
++}
+
