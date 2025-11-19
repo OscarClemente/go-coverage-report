@@ -249,7 +249,7 @@ func (r *Report) getNewCodeBlocks() []NewCodeBlock {
 						}
 					}
 				}
-				
+
 				if line, exists := sourceLines[lineNum]; exists {
 					block.Lines = append(block.Lines, line)
 				}
@@ -405,7 +405,7 @@ func (r *Report) calculateNewCodeCoverageFromDiff() (totalNew, coveredNew int64)
 		for _, block := range newProfile.Blocks {
 			// Try AST-based counting first (more accurate)
 			stmtCount, covered := r.countStatementsInBlockUsingAST(fileName, block, fileDiff)
-			
+
 			if stmtCount >= 0 {
 				// AST-based counting succeeded
 				totalNew += int64(stmtCount)
@@ -414,30 +414,30 @@ func (r *Report) calculateNewCodeCoverageFromDiff() (totalNew, coveredNew int64)
 				}
 				continue
 			}
-			
+
 			// Fallback to proportional estimation if AST parsing fails
 			changedLinesInBlock := 0
 			totalLinesInBlock := block.EndLine - block.StartLine + 1
-			
+
 			for line := block.StartLine; line <= block.EndLine; line++ {
 				if fileDiff.AddedLines[line] || fileDiff.ModifiedLines[line] {
 					changedLinesInBlock++
 				}
 			}
-			
+
 			// Only count this block if at least one line was changed
 			// Estimate the number of statements that were changed based on the proportion of changed lines
 			if changedLinesInBlock > 0 {
 				// Calculate the proportion of lines that were changed
 				proportion := float64(changedLinesInBlock) / float64(totalLinesInBlock)
-				
+
 				// Estimate the number of statements that were actually new/changed
 				// Round up to ensure we count at least 1 statement if any line changed
 				estimatedStmts := int64(float64(block.NumStmt) * proportion)
 				if estimatedStmts == 0 && changedLinesInBlock > 0 {
 					estimatedStmts = 1
 				}
-				
+
 				totalNew += estimatedStmts
 				if block.Count > 0 {
 					coveredNew += estimatedStmts
@@ -774,14 +774,14 @@ func (r *Report) countStatementsInBlockUsingAST(fileName string, block ProfileBl
 	if r.astMapper == nil {
 		return -1, false
 	}
-	
+
 	// Get or compute statement lines for this file
 	statementLines, ok := r.astCache[fileName]
 	if !ok {
 		// Try to resolve the file path
 		paths := r.resolveFilePath(fileName)
 		var err error
-		
+
 		for _, path := range paths {
 			statementLines, err = r.astMapper.GetStatementLines(path)
 			if err == nil {
@@ -789,13 +789,13 @@ func (r *Report) countStatementsInBlockUsingAST(fileName string, block ProfileBl
 				break
 			}
 		}
-		
+
 		if err != nil {
 			// AST parsing failed, return -1 to indicate fallback needed
 			return -1, false
 		}
 	}
-	
+
 	// Count statements on changed lines within this block
 	count = 0
 	for line := block.StartLine; line <= block.EndLine; line++ {
@@ -804,12 +804,12 @@ func (r *Report) countStatementsInBlockUsingAST(fileName string, block ProfileBl
 			count++
 		}
 	}
-	
+
 	// If no statements found on changed lines, return -1 to use fallback
 	if count == 0 {
 		return -1, false
 	}
-	
+
 	covered = block.Count > 0
 	return count, covered
 }
@@ -817,7 +817,7 @@ func (r *Report) countStatementsInBlockUsingAST(fileName string, block ProfileBl
 // resolveFilePath tries multiple paths to locate the source file
 func (r *Report) resolveFilePath(fileName string) []string {
 	paths := []string{fileName}
-	
+
 	// Try stripping package path prefixes
 	parts := strings.Split(fileName, "/")
 	for i := range parts {
@@ -826,10 +826,10 @@ func (r *Report) resolveFilePath(fileName string) []string {
 			paths = append(paths, relativePath)
 		}
 	}
-	
+
 	// Try testdata directory
 	paths = append(paths, filepath.Join("testdata", fileName))
-	
+
 	return paths
 }
 

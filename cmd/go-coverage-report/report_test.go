@@ -825,7 +825,7 @@ This section shows the coverage status of each new code block added in this PR.
 func TestReport_ProportionalStatementCounting(t *testing.T) {
 	// This test demonstrates that when a coverage block spans both changed and unchanged lines,
 	// we estimate the number of changed statements proportionally
-	
+
 	// Create a mock coverage scenario:
 	// Block 1: Lines 10-15 (6 lines), 3 statements, covered
 	//   - Lines 10, 11, 12 are new (3 out of 6 lines = 50%)
@@ -833,7 +833,7 @@ func TestReport_ProportionalStatementCounting(t *testing.T) {
 	// Block 2: Lines 20-22 (3 lines), 2 statements, not covered
 	//   - Lines 20, 21, 22 are all new (3 out of 3 lines = 100%)
 	//   - Expected: 2 * 1.0 = 2 statements counted as new
-	
+
 	oldCov := &Coverage{
 		Files: map[string]*Profile{
 			"test.go": {
@@ -846,7 +846,7 @@ func TestReport_ProportionalStatementCounting(t *testing.T) {
 		TotalStmt:   0,
 		CoveredStmt: 0,
 	}
-	
+
 	newCov := &Coverage{
 		Files: map[string]*Profile{
 			"test.go": {
@@ -872,9 +872,9 @@ func TestReport_ProportionalStatementCounting(t *testing.T) {
 		TotalStmt:   5,
 		CoveredStmt: 3,
 	}
-	
+
 	changedFiles := []string{"test.go"}
-	
+
 	diffInfo := &DiffInfo{
 		Files: map[string]*FileDiff{
 			"test.go": {
@@ -891,19 +891,19 @@ func TestReport_ProportionalStatementCounting(t *testing.T) {
 			},
 		},
 	}
-	
+
 	report := NewReport(oldCov, newCov, changedFiles)
 	report.DiffInfo = diffInfo
 	totalNew, coveredNew := report.calculateNewCodeCoverage()
-	
+
 	// Block 1: 3 statements * (3 changed / 6 total) = 1.5 → 1 statement
 	// Block 2: 2 statements * (3 changed / 3 total) = 2 statements
 	// Total expected: 1 + 2 = 3 statements
 	assert.Equal(t, int64(3), totalNew, "Should count 3 statements (1 from block 1, 2 from block 2)")
-	
+
 	// Only block 1 is covered, which contributes 1 statement
 	assert.Equal(t, int64(1), coveredNew, "Should count 1 covered statement (from block 1)")
-	
+
 	// Coverage should be 1/3 = 33.33%
 	coverage := float64(coveredNew) / float64(totalNew) * 100
 	assert.InDelta(t, 33.33, coverage, 0.1, "Coverage should be approximately 33.33%")
@@ -912,7 +912,7 @@ func TestReport_ProportionalStatementCounting(t *testing.T) {
 func TestReport_ASTBasedCounting(t *testing.T) {
 	// This test verifies that AST-based statement counting works correctly
 	// and provides more accurate results than proportional estimation
-	
+
 	oldCov, err := ParseCoverage("testdata/03-old-coverage.txt")
 	require.NoError(t, err)
 
@@ -920,7 +920,7 @@ func TestReport_ASTBasedCounting(t *testing.T) {
 	require.NoError(t, err)
 
 	changedFiles := []string{"example.com/calculator/math.go"}
-	
+
 	// Create diff info that marks specific lines as changed
 	diffInfo := &DiffInfo{
 		Files: map[string]*FileDiff{
@@ -945,19 +945,19 @@ func TestReport_ASTBasedCounting(t *testing.T) {
 			},
 		},
 	}
-	
+
 	report := NewReport(oldCov, newCov, changedFiles)
 	report.DiffInfo = diffInfo
-	
+
 	totalNew, coveredNew := report.calculateNewCodeCoverage()
-	
+
 	t.Logf("AST-based counting: %d/%d statements = %.2f%% coverage",
 		coveredNew, totalNew, float64(coveredNew)/float64(totalNew)*100)
-	
+
 	// With AST-based counting, we should get accurate statement counts
 	// The exact numbers depend on the actual code structure
 	assert.Greater(t, totalNew, int64(0), "Should detect new statements")
-	
+
 	// Verify coverage percentage
 	if totalNew > 0 {
 		coverage := float64(coveredNew) / float64(totalNew) * 100

@@ -1,5 +1,5 @@
-run:
-  skip-dirs:
+issues:
+  exclude-dirs:
     - testdata    # Exclude test data files from linting
 
 linters:

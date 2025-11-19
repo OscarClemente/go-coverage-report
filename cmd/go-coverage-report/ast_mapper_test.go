@@ -113,7 +113,7 @@ func example() {
 func TestStatementLineMapper_RealWorldExample(t *testing.T) {
 	// Test with the actual math.go file from our test data
 	testFile := "testdata/example.com/calculator/math.go"
-	
+
 	// Check if file exists
 	if _, err := os.Stat(testFile); os.IsNotExist(err) {
 		t.Skip("Test file doesn't exist, skipping")
@@ -127,8 +127,7 @@ func TestStatementLineMapper_RealWorldExample(t *testing.T) {
 	// The Divide function should have statements
 	// Based on the file content, we know certain lines have statements
 	t.Logf("Found %d statement lines in %s", len(statementLines), testFile)
-	
+
 	// Just verify we found some statements
 	assert.Greater(t, len(statementLines), 0, "Should find at least some statements")
 }
-

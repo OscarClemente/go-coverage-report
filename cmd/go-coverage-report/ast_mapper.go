@@ -145,4 +145,3 @@ func (m *StatementLineMapper) GetStatementLinesInRange(filePath string, startLin
 
 	return statementsInRange, nil
 }
-
