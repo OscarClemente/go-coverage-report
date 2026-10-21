@@ -13,7 +13,9 @@ permissions:
   contents: read
 
 env:
-  GO_VERSION: "stable"
+  # Pinned rather than "stable": golangci-lint cannot typecheck a Go release newer than it supports,
+  # so bump this together with the golangci-lint version below.
+  GO_VERSION: "1.26.x"
 
 jobs:
   dependencies:
