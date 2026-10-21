@@ -16,8 +16,16 @@ type Report struct {
 	ChangedPackages []string
 	MinCoverage     float64   // Minimum coverage threshold for new code (0 to disable)
 	DiffInfo        *DiffInfo // Optional: git diff information for line-level coverage
+	Breakdown       []BreakdownEntry
 	astMapper       *StatementLineMapper
 	astCache        map[string]map[int]bool // Cache of file -> statement lines
+}
+
+// BreakdownEntry is an extra coverage profile (e.g. unit or integration tests only)
+// whose total is shown below the report title.
+type BreakdownEntry struct {
+	Label    string
+	Coverage *Coverage
 }
 
 func NewReport(oldCov, newCov *Coverage, changedFiles []string) *Report {
@@ -481,12 +489,39 @@ func (r *Report) Markdown() string {
 	report := new(strings.Builder)
 
 	fmt.Fprintln(report, r.Title())
+	r.addBreakdown(report)
 	r.addOverallCoverageSummary(report)
 	r.addPackageDetails(report)
 	r.addFileDetails(report)
 	r.addNewCodeDetailsSection(report)
 
 	return report.String()
+}
+
+func (r *Report) addBreakdown(report *strings.Builder) {
+	if len(r.Breakdown) == 0 {
+		return
+	}
+
+	parts := make([]string, 0, len(r.Breakdown))
+	for _, entry := range r.Breakdown {
+		percent := entry.Coverage.Percent()
+		parts = append(parts, fmt.Sprintf("%s %s **%.2f%%**", entry.Label, breakdownIndicator(percent), percent))
+	}
+
+	fmt.Fprintln(report)
+	fmt.Fprintln(report, strings.Join(parts, " · "))
+}
+
+func breakdownIndicator(percent float64) string {
+	switch {
+	case percent >= 80:
+		return "🟢"
+	case percent >= 60:
+		return "🟡"
+	default:
+		return "🔴"
+	}
 }
 
 func (r *Report) addOverallCoverageSummary(report *strings.Builder) {

@@ -69,3 +69,7 @@ jobs:
         with:
           version: local
           trim: "github.com/fgrosse/go-coverage-report/"
+          # main gets few pushes, so the default 14 days often finds no baseline run
+          baseline-lookback-days: "90"
+          coverage-breakdown: |
+            Unit Tests=code-coverage/coverage.txt

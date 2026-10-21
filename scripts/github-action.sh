@@ -36,7 +36,8 @@ You can use the following environment variables to configure the script:
 - MIN_COVERAGE_NEW_CODE: Minimum coverage threshold for new code in percentage (default: 0, disabled)
 - USE_GIT_DIFF: Use git diff for line-level coverage calculation (default: true)
 - BASELINE_LOOKBACK_DAYS: Only consider target-branch runs created in this many days (default: 14)
-- EXTRA_SUMMARY_FILE: Markdown file inserted right below the report title (optional)
+- COVERAGE_BREAKDOWN: Newline-separated LABEL=ARTIFACT_NAME/FILE_NAME entries from the current run whose total
+  coverage is shown below the report title (optional)
 "
 
 if [[ $# != 3 ]]; then
@@ -106,6 +107,36 @@ mv "/tmp/gh-run-download-$GITHUB_RUN_ID/$COVERAGE_FILE_NAME" $NEW_COVERAGE_PATH
 rm -r "/tmp/gh-run-download-$GITHUB_RUN_ID"
 end_group
 
+BREAKDOWN_ARGS=()
+if [ -n "${COVERAGE_BREAKDOWN:-}" ]; then
+  start_group "Download coverage breakdown results from current run"
+  BREAKDOWN_INDEX=0
+  while IFS= read -r ENTRY; do
+    ENTRY="${ENTRY#"${ENTRY%%[![:space:]]*}"}"
+    ENTRY="${ENTRY%"${ENTRY##*[![:space:]]}"}"
+    [ -z "$ENTRY" ] && continue
+    LABEL=${ENTRY%%=*}
+    LABEL="${LABEL%"${LABEL##*[![:space:]]}"}"
+    ARTIFACT_PATH=${ENTRY#*=}
+    ARTIFACT_PATH="${ARTIFACT_PATH#"${ARTIFACT_PATH%%[![:space:]]*}"}"
+    ARTIFACT_NAME=${ARTIFACT_PATH%%/*}
+    ARTIFACT_FILE=${ARTIFACT_PATH#*/}
+    if [[ "$ENTRY" != *=* || -z "$LABEL" || "$ARTIFACT_PATH" != */* || -z "$ARTIFACT_NAME" || -z "$ARTIFACT_FILE" ]]; then
+      echo "::error::Invalid coverage-breakdown entry \"$ENTRY\", expected LABEL=ARTIFACT_NAME/FILE_NAME"
+      exit 1
+    fi
+
+    BREAKDOWN_DIR="/tmp/gh-run-download-breakdown-$BREAKDOWN_INDEX"
+    BREAKDOWN_PATH=".github/outputs/breakdown-coverage-$BREAKDOWN_INDEX.txt"
+    gh run download "$GITHUB_RUN_ID" --name="$ARTIFACT_NAME" --dir="$BREAKDOWN_DIR"
+    mv "$BREAKDOWN_DIR/$ARTIFACT_FILE" "$BREAKDOWN_PATH"
+    rm -r "$BREAKDOWN_DIR"
+    BREAKDOWN_ARGS+=(-breakdown="$LABEL=$BREAKDOWN_PATH")
+    BREAKDOWN_INDEX=$((BREAKDOWN_INDEX + 1))
+  done <<< "$COVERAGE_BREAKDOWN"
+  end_group
+fi
+
 start_group "Download code coverage results from target branch"
 # GitHub caps filtered workflow-run searches at 1000 results. An unbounded
 # list can return a stale run whose coverage artifact has already expired.
@@ -169,6 +200,7 @@ COVERAGE_ARGS=(-root="$ROOT_PACKAGE" -trim="$TRIM_PACKAGE" -min-coverage="$MIN_C
 if [ -f "$DIFF_FILE_PATH" ]; then
   COVERAGE_ARGS+=(-diff="$DIFF_FILE_PATH")
 fi
+COVERAGE_ARGS+=("${BREAKDOWN_ARGS[@]}")
 COVERAGE_ARGS+=("$OLD_COVERAGE_PATH" "$NEW_COVERAGE_PATH" "$CHANGED_FILES_PATH")
 
 go-coverage-report "${COVERAGE_ARGS[@]}" > "$COVERAGE_COMMENT_PATH" 2>"$COVERAGE_COMMENT_PATH.err"
@@ -179,20 +211,6 @@ end_group
 if [ ! -s $COVERAGE_COMMENT_PATH ]; then
   echo "::notice::No coverage report to output"
   exit 0
-fi
-
-if [ -n "$EXTRA_SUMMARY_FILE" ]; then
-  if [ ! -s "$EXTRA_SUMMARY_FILE" ]; then
-    echo "::error::EXTRA_SUMMARY_FILE \"$EXTRA_SUMMARY_FILE\" is missing or empty"
-    exit 1
-  fi
-  {
-    head -n 1 "$COVERAGE_COMMENT_PATH"
-    echo
-    cat "$EXTRA_SUMMARY_FILE"
-    tail -n +2 "$COVERAGE_COMMENT_PATH"
-  } > "$COVERAGE_COMMENT_PATH.tmp"
-  mv "$COVERAGE_COMMENT_PATH.tmp" "$COVERAGE_COMMENT_PATH"
 fi
 
 # Output the coverage report as a multiline GitHub output parameter

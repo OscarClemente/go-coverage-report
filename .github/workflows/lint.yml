@@ -57,6 +57,8 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.13.2
+          # prebuilt binaries cannot typecheck a GOROOT newer than the Go they were built with
+          install-mode: goinstall
 
   shell-check:
     runs-on: ubuntu-latest
