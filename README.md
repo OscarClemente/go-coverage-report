@@ -181,6 +181,14 @@ inputs:
     required: false
     default: '0'
 
+  coverage-breakdown:
+    description: |
+      Extra coverage profiles from the current run whose total coverage is shown below the
+      report title, one per line as LABEL=ARTIFACT_NAME/FILE_NAME, e.g.
+        Unit Tests=unit-coverage/coverage-unit.txt
+        Integration Tests=integration-coverage/coverage-integration.txt
+    required: false
+
   github-baseline-workflow-ref:
     description: |
       The ref of the GitHub actions Workflow that produces the baseline coverage.

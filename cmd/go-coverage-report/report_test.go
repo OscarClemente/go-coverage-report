@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -199,6 +200,55 @@ func TestReport_MinimumCoverageThreshold(t *testing.T) {
 	opts = options{minCoverage: 0}
 	if opts.minCoverage > 0 {
 		t.Errorf("Expected threshold check to be disabled when minCoverage is 0")
+	}
+}
+
+func TestReport_Markdown_WithBreakdown(t *testing.T) {
+	oldCov, err := ParseCoverage("testdata/01-old-coverage.txt")
+	require.NoError(t, err)
+
+	newCov, err := ParseCoverage("testdata/01-new-coverage.txt")
+	require.NoError(t, err)
+
+	changedFiles, err := ParseChangedFiles("testdata/01-changed-files.json", "github.com/fgrosse/prioqueue")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name      string
+		breakdown []BreakdownEntry
+		expected  string
+	}{
+		{
+			name:     "no breakdown",
+			expected: "### Coverage Report - 90.20% (**-9.80%**) - **decrease**\n\n#### Overall Coverage Summary\n",
+		},
+		{
+			name: "one entry per threshold band",
+			breakdown: []BreakdownEntry{
+				{Label: "Unit Tests", Coverage: &Coverage{TotalStmt: 1000, CoveredStmt: 849}},
+				{Label: "Integration Tests", Coverage: &Coverage{TotalStmt: 1000, CoveredStmt: 600}},
+				{Label: "E2E Tests", Coverage: &Coverage{TotalStmt: 1000, CoveredStmt: 429}},
+			},
+			expected: "### Coverage Report - 90.20% (**-9.80%**) - **decrease**\n\n" +
+				"Unit Tests 🟢 **84.90%** · Integration Tests 🟡 **60.00%** · E2E Tests 🔴 **42.90%**\n\n" +
+				"#### Overall Coverage Summary\n",
+		},
+		{
+			name:      "empty profile",
+			breakdown: []BreakdownEntry{{Label: "Unit Tests", Coverage: &Coverage{}}},
+			expected: "### Coverage Report - 90.20% (**-9.80%**) - **decrease**\n\n" +
+				"Unit Tests 🔴 **0.00%**\n\n" +
+				"#### Overall Coverage Summary\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			report := NewReport(oldCov, newCov, changedFiles)
+			report.Breakdown = tt.breakdown
+
+			assert.True(t, strings.HasPrefix(report.Markdown(), tt.expected), report.Markdown())
+		})
 	}
 }
 

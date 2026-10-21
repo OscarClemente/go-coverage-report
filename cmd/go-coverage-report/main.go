@@ -30,6 +30,8 @@ ARGUMENTS:
 OPTIONS:
   -diff string
         Path to git diff file (unified diff format) for accurate line-level coverage calculation
+  -breakdown LABEL=FILE
+        Show the total coverage of FILE under LABEL below the report title (repeatable)
 `, filepath.Base(os.Args[0])))
 
 type options struct {
@@ -38,7 +40,25 @@ type options struct {
 	format      string
 	minCoverage float64
 	diffFile    string
+	breakdown   breakdownFlag
 }
+
+type breakdownFlag []string
+
+func (b *breakdownFlag) String() string {
+	return strings.Join(*b, ",")
+}
+
+func (b *breakdownFlag) Set(value string) error {
+	label, file, ok := strings.Cut(value, "=")
+	if !ok || strings.TrimSpace(label) == "" || strings.TrimSpace(file) == "" {
+		return fmt.Errorf("expected LABEL=FILE but got %q", value)
+	}
+	*b = append(*b, value)
+	return nil
+}
+
+var breakdown breakdownFlag
 
 func main() {
 	log.SetFlags(0)
@@ -53,6 +73,7 @@ func main() {
 	flag.String("format", "markdown", "output format (currently only 'markdown' is supported)")
 	flag.Float64("min-coverage", 0, "minimum coverage threshold for new code in percentage (0 to disable)")
 	flag.String("diff", "", "path to git diff file (unified diff format) for accurate line-level coverage calculation")
+	flag.Var(&breakdown, "breakdown", "LABEL=FILE: show the total coverage of FILE under LABEL below the report title (repeatable)")
 
 	err := run(programArgs())
 	if err != nil {
@@ -81,6 +102,7 @@ func programArgs() (oldCov, newCov, changedFile string, opts options) {
 		format:      flag.Lookup("format").Value.String(),
 		minCoverage: minCoverage,
 		diffFile:    flag.Lookup("diff").Value.String(),
+		breakdown:   breakdown,
 	}
 
 	return args[0], args[1], args[2], opts
@@ -120,6 +142,14 @@ func run(oldCovPath, newCovPath, changedFilesPath string, opts options) error {
 	report := NewReport(oldCov, newCov, changedFiles)
 	report.MinCoverage = opts.minCoverage
 	report.DiffInfo = diffInfo
+	for _, entry := range opts.breakdown {
+		label, file, _ := strings.Cut(entry, "=")
+		cov, err := ParseCoverage(file)
+		if err != nil {
+			return fmt.Errorf("failed to parse breakdown coverage %q: %w", label, err)
+		}
+		report.Breakdown = append(report.Breakdown, BreakdownEntry{Label: label, Coverage: cov})
+	}
 	if opts.trim != "" {
 		report.TrimPrefix(opts.trim)
 	}
